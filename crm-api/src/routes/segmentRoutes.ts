@@ -1,0 +1,14 @@
+import { Router } from 'express';
+import { getSegments, createSegment, updateSegment, deleteSegment } from '../controllers/segmentController';
+import { authenticate } from '../middleware/auth';
+
+const router = Router();
+
+router.use(authenticate);
+
+router.get('/', getSegments);
+router.post('/', createSegment);
+router.patch('/:id', updateSegment);
+router.delete('/:id', deleteSegment);
+
+export default router;

@@ -1,0 +1,14 @@
+import { Router } from 'express';
+import { importCSV, exportExcel } from '../controllers/toolController';
+import { authenticate } from '../middleware/auth';
+import multer from 'multer';
+
+const router = Router();
+const upload = multer({ dest: 'uploads/' });
+
+router.use(authenticate);
+
+router.post('/import', upload.single('file'), importCSV);
+router.get('/export', exportExcel);
+
+export default router;
