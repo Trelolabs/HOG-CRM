@@ -1,0 +1,121 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f6f7fb;
+  --foreground: #12151f;
+  --muted: #5b6474;
+  --card: #ffffff;
+  --primary: #6f3145;
+  --primary-foreground: #ffffff;
+  --danger: #c53030;
+  --danger-foreground: #ffffff;
+  --border: #e7e8ee;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.crm-shell {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  min-height: 100vh;
+  transition: grid-template-columns 0.2s ease;
+}
+
+.crm-shell-collapsed {
+  grid-template-columns: 70px 1fr;
+}
+
+.crm-sidebar {
+  background: #10131b;
+  color: #f1f3f8;
+  border-right: 1px solid #1f2531;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.crm-content {
+  /* padding: 1.5rem; */
+}
+
+.crm-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 0.875rem;
+}
+
+.crm-input {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 0.625rem;
+  padding: 0.6rem 0.75rem;
+  font-size: 0.92rem;
+}
+
+.crm-btn {
+  border-radius: 0.625rem;
+  padding: 0.6rem 0.95rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  transition: all 0.15s ease;
+}
+
+.crm-btn-primary {
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+
+.crm-btn-ghost {
+  border: 1px solid var(--border);
+  background: #fff;
+}
+
+.crm-btn-danger {
+  background: var(--danger);
+  color: var(--danger-foreground);
+}
+
+.crm-btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.crm-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  border-top-color: currentColor;
+  border-radius: 999px;
+  animation: crm-spin 0.7s linear infinite;
+}
+
+.crm-spinner-dark {
+  border-color: rgba(0, 0, 0, 0.15);
+  border-top-color: #111;
+}
+
+@keyframes crm-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
