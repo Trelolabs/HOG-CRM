@@ -50,7 +50,9 @@ type CampaignSendResult = {
 
 const sendEmailCampaign = async (segmentId: string, subject: string, content: string, emailProvider: EmailProvider): Promise<CampaignSendResult> => {
     const recipients = await prisma.lead.findMany({
-        where: { segmentId, email: { not: null } },
+        where: { segmentId, email: {
+            not: ''
+        } },
         select: { email: true }
     });
 

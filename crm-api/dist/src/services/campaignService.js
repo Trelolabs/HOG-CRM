@@ -29,7 +29,7 @@ const createProviders = () => {
 };
 const sendEmailCampaign = async (segmentId, subject, content, emailProvider) => {
     const recipients = await prisma.lead.findMany({
-        where: { segmentId, email: { not: null } },
+        where: { segmentId, NOT: { email: '' } },
         select: { email: true }
     });
     if (recipients.length === 0) {
