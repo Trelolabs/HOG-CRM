@@ -1,4 +1,5 @@
 import prisma from '../utils/prisma';
+import { sendCampaignWithProvider } from '../services/campaignService';
 const CAMPAIGN_TYPES = ['EMAIL', 'SMS'];
 const CAMPAIGN_STATUSES = ['DRAFT', 'SCHEDULED', 'SENT', 'FAILED'];
 export const createCampaign = async (req, res) => {
@@ -103,17 +104,10 @@ export const updateCampaign = async (req, res) => {
 export const sendCampaign = async (req, res) => {
     const { id } = req.params;
     try {
-        const campaign = await prisma.campaign.update({
-            where: { id: String(id) },
-            data: {
-                status: 'SENT',
-                sentAt: new Date()
-            },
-            include: { segment: true }
-        });
+        const result = await sendCampaignWithProvider(String(id));
         res.json({
-            message: `${campaign.type} campaign marked as sent (provider integration pending)`,
-            campaign
+            message: `Campaign processed with ${result.mode} provider mode`,
+            campaign: result.campaign
         });
     }
     catch (error) {

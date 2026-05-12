@@ -22,6 +22,7 @@ const mockPrisma = vi.hoisted(() => ({
     campaign: {
         create: vi.fn(),
         findMany: vi.fn(),
+        findUnique: vi.fn(),
         update: vi.fn(),
         deleteMany: vi.fn()
     },
@@ -121,8 +122,22 @@ describe('CRM API endpoints', () => {
         mockPrisma.campaign.create.mockResolvedValue({
             id: 'camp_1',
             type: 'EMAIL',
-            status: 'DRAFT'
+            status: 'DRAFT',
+            segmentId: 'seg_1',
+            name: 'Launch',
+            subject: 'Launch',
+            content: 'Campaign content'
         });
+        mockPrisma.campaign.findUnique.mockResolvedValue({
+            id: 'camp_1',
+            type: 'EMAIL',
+            status: 'DRAFT',
+            segmentId: 'seg_1',
+            name: 'Launch',
+            subject: 'Launch',
+            content: 'Campaign content'
+        });
+        mockPrisma.lead.findMany.mockResolvedValue([{ email: 'alex@example.com' }]);
         mockPrisma.campaign.update.mockResolvedValue({
             id: 'camp_1',
             type: 'EMAIL',

@@ -38,6 +38,9 @@ export const updateSegment = async (req: Request, res: Response) => {
     if (typeof name === 'undefined' && typeof description === 'undefined') {
         return res.status(400).json({ error: 'At least one field (name or description) is required' });
     }
+    if (typeof name !== 'undefined' && !String(name).trim()) {
+        return res.status(400).json({ error: 'Segment name is required' });
+    }
 
     try {
         const segment = await prisma.segment.update({

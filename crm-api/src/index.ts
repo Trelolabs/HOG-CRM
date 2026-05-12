@@ -1,5 +1,6 @@
 import dotenv from 'dotenv';
 import { createApp } from './app';
+import { validateCampaignProviderConfig } from './services/campaignService';
 
 dotenv.config();
 
@@ -9,6 +10,7 @@ const missingEnvVars = requiredEnvVars.filter((envVar) => !process.env[envVar]);
 if (missingEnvVars.length > 0) {
     throw new Error(`Missing required environment variables: ${missingEnvVars.join(', ')}`);
 }
+validateCampaignProviderConfig();
 
 const port = Number(process.env.PORT || 4000);
 const app = createApp();

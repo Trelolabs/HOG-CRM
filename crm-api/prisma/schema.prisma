@@ -42,6 +42,10 @@ model Campaign {
   segment     Segment  @relation(fields: [segmentId], references: [id])
   status      CampaignStatus @default(DRAFT)
   sentAt      DateTime?
+  providerMessageId String?
+  failureReason String?
+  attemptedRecipients Int @default(0)
+  sentRecipients Int @default(0)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }

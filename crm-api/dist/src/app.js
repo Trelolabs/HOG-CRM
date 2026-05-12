@@ -4,6 +4,7 @@ import bodyParser from 'body-parser';
 import leadRoutes from './routes/leadRoutes';
 import segmentRoutes from './routes/segmentRoutes';
 import campaignRoutes from './routes/campaignRoutes';
+import dashboardRoutes from './routes/dashboardRoutes';
 import toolRoutes from './routes/toolRoutes';
 export const createApp = () => {
     const app = express();
@@ -19,6 +20,7 @@ export const createApp = () => {
     app.use('/api/leads', leadRoutes);
     app.use('/api/segments', segmentRoutes);
     app.use('/api/campaigns', campaignRoutes);
+    app.use('/api/dashboard', dashboardRoutes);
     app.use('/api/tools', toolRoutes);
     app.get('/health', (req, res) => {
         res.json({ status: 'OK', message: 'CRM API is running smoothly' });
