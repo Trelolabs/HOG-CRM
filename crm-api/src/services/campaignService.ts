@@ -9,7 +9,7 @@ type ProviderMode = 'mock' | 'live';
 const providerMode = (process.env.CAMPAIGN_PROVIDER_MODE || 'mock').toLowerCase() as ProviderMode;
 
 const getMissingEnvVarsForLiveMode = () => {
-    const required = ['SENDGRID_API_KEY', 'SENDGRID_FROM_EMAIL', 'TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN', 'TWILIO_PHONE_NUMBER'];
+    const required = ['SENDGRID_API_KEY', 'SENDGRID_FROM_EMAIL']; //Let's add 't'TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN', 'TWILIO_PHONE_NUMBER' later
     return required.filter((key) => !process.env[key]);
 };
 
@@ -32,12 +32,15 @@ const createProviders = (): { emailProvider: EmailProvider; smsProvider: SmsProv
 
     return {
         emailProvider: new SendGridProvider(String(process.env.SENDGRID_API_KEY), String(process.env.SENDGRID_FROM_EMAIL)),
-        smsProvider: new TwilioProvider(
-            String(process.env.TWILIO_ACCOUNT_SID),
-            String(process.env.TWILIO_AUTH_TOKEN),
-            String(process.env.TWILIO_PHONE_NUMBER)
-        )
+        smsProvider: null
+        // smsProvider: new TwilioProvider(
+        //     String(process.env.TWILIO_ACCOUNT_SID),
+        //     String(process.env.TWILIO_AUTH_TOKEN),
+        //     String(process.env.TWILIO_PHONE_NUMBER)
+        // )
     };
+
+
 };
 
 type CampaignSendResult = {
@@ -55,6 +58,7 @@ const sendEmailCampaign = async (segmentId: string, subject: string, content: st
         } },
         select: { email: true }
     });
+
 
     if (recipients.length === 0) {
         return {
@@ -136,6 +140,7 @@ export const sendCampaignWithProvider = async (campaignId: string) => {
         (notFoundError as Error & { code?: string }).code = 'P2025';
         throw notFoundError;
     }
+    
     if (campaign.status === 'SENT') {
         return {
             mode: providerMode,
@@ -143,11 +148,11 @@ export const sendCampaignWithProvider = async (campaignId: string) => {
         };
     }
 
-    const { emailProvider, smsProvider } = createProviders();
+    const { emailProvider } = createProviders();
     const result =
         campaign.type === CampaignType.EMAIL
-            ? await sendEmailCampaign(campaign.segmentId, campaign.subject || campaign.name, campaign.content, emailProvider)
-            : await sendSmsCampaign(campaign.segmentId, campaign.content, smsProvider);
+            ? await sendEmailCampaign(campaign.segmentId, campaign.subject || campaign.name, campaign.content, emailProvider) : null
+            // : await sendSmsCampaign(campaign.segmentId, campaign.content, smsProvider);
 
     const updatedCampaign = await prisma.campaign.update({
         where: { id: campaign.id },
