@@ -11,7 +11,7 @@ model Lead {
   id              String   @id @default(cuid())
   fullName        String
   email           String   @unique
-  whatsapp        String?
+  whatsapp        String
   businessName    String?
   serviceInterest String?
   message         String?

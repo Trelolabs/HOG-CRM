@@ -10,8 +10,9 @@ async function handleRequest(
   method: string
 ) {
   const { slug } = await params;
-  const path = `/api/${slug.join('/')}`;
-  const routeKey = `${method}:${path}`;
+  const requestUrl = new URL(request.url);
+  const path = `/api/${slug.join('/')}${requestUrl.search}`;
+  const routeKey = `${method}:/api/${slug.join('/')}`;
   const cookieStore = await cookies();
   const isLoggedIn = cookieStore.get('hog_session')?.value === '1';
 

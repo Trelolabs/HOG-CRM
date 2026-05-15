@@ -1,6 +1,7 @@
 'use client';
 
 import { FormEvent, useCallback, useEffect, useState } from 'react';
+import { toast } from 'sonner';
 import { apiClient } from '@/lib/apiClient';
 import type { Segment } from '@/lib/types';
 import PageHeader from '@/components/ui/PageHeader';
@@ -83,10 +84,13 @@ export default function SegmentsPage() {
       setDescription('');
       setErrors({});
       setShowCreateModal(false);
+      toast.success(`Segment "${name.trim()}" created successfully`);
 
       await load();
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : 'Failed to create segment');
+      const message = error instanceof Error ? error.message : 'Failed to create segment';
+      setErrorMessage(message);
+      toast.error(message);
     } finally {
       setCreating(false);
     }
@@ -101,11 +105,14 @@ export default function SegmentsPage() {
       await apiClient.delete(`/api/segments/${segmentToDelete.id}`);
 
       setShowDeleteModal(false);
+      toast.success(`Segment "${segmentToDelete.name}" deleted successfully`);
       setSegmentToDelete(null);
 
       await load();
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : 'Failed to delete segment');
+      const message = error instanceof Error ? error.message : 'Failed to delete segment';
+      setErrorMessage(message);
+      toast.error(message);
     } finally {
       setDeletingSegmentId(null);
     }

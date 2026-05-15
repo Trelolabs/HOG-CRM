@@ -58,11 +58,23 @@ describe('CRM API endpoints', () => {
         const app = createApp();
         const response = await request(app).post('/api/leads').send({
             fullName: 'Alex Admin',
-            email: 'alex@example.com'
+            email: 'alex@example.com',
+            whatsapp: '+1234567890'
         });
 
         expect(response.status).toBe(201);
         expect(response.body.email).toBe('alex@example.com');
+    });
+
+    it('rejects lead creation without mobile number', async () => {
+        const app = createApp();
+        const response = await request(app).post('/api/leads').send({
+            fullName: 'Alex Admin',
+            email: 'alex@example.com'
+        });
+
+        expect(response.status).toBe(400);
+        expect(response.body.error).toContain('mobile number');
     });
 
     it('returns paginated leads for admin', async () => {
@@ -170,7 +182,7 @@ describe('CRM API endpoints', () => {
                 id: 'lead_1',
                 fullName: 'Alex',
                 email: 'alex@example.com',
-                whatsapp: null,
+                whatsapp: '+1234567890',
                 businessName: null,
                 serviceInterest: null,
                 status: 'NEW',

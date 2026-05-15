@@ -1,6 +1,7 @@
 'use client';
 
 import { FormEvent, useCallback, useEffect, useState } from 'react';
+import { toast } from 'sonner';
 import { apiClient } from '@/lib/apiClient';
 import type { Campaign, Segment } from '@/lib/types';
 import PageHeader from '@/components/ui/PageHeader';
@@ -48,11 +49,15 @@ export default function CampaignsPage() {
     try {
       setCreating(true);
       setErrorMessage('');
+      const campaignName = form.name.trim();
       await apiClient.post('/api/campaigns', form);
       setForm({ type: 'EMAIL', name: '', subject: '', content: '', segmentId: '' });
+      toast.success(`Campaign "${campaignName}" created successfully`);
       await load();
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : 'Failed to create campaign');
+      const message = error instanceof Error ? error.message : 'Failed to create campaign';
+      setErrorMessage(message);
+      toast.error(message);
     } finally {
       setCreating(false);
     }
@@ -62,10 +67,23 @@ export default function CampaignsPage() {
     try {
       setSendingId(id);
       setErrorMessage('');
-      await apiClient.post(`/api/campaigns/${id}/send`, {});
+      const result = await apiClient.post<{ message?: string; campaign?: { status?: string } }>(
+        `/api/campaigns/${id}/send`,
+        {}
+      );
+      const status = result.campaign?.status;
+      if (status === 'SENT') {
+        toast.success(result.message || 'Campaign sent successfully');
+      } else if (status === 'FAILED') {
+        toast.error('Campaign failed to send');
+      } else {
+        toast.success(result.message || 'Campaign processed successfully');
+      }
       await load();
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : 'Failed to send campaign');
+      const message = error instanceof Error ? error.message : 'Failed to send campaign';
+      setErrorMessage(message);
+      toast.error(message);
     } finally {
       setSendingId(null);
     }

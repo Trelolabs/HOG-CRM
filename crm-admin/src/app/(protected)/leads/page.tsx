@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { toast } from 'sonner';
 import * as XLSX from 'xlsx';
 import { apiClient } from '@/lib/apiClient';
 import type { Lead, LeadStatus, Segment } from '@/lib/types';
@@ -32,7 +33,6 @@ export default function LeadsPage() {
   const [leadToDelete, setLeadToDelete] = useState<Lead | null>(null);
   const [showImportModal, setShowImportModal] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
-  const [importMessage, setImportMessage] = useState('');
   const [importing, setImporting] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
@@ -103,9 +103,12 @@ export default function LeadsPage() {
       await apiClient.delete(`/api/leads/${leadToDelete.id}`);
       setShowDeleteModal(false);
       setLeadToDelete(null);
+      toast.success(`${leadToDelete.fullName} deleted successfully`);
       await loadLeads();
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : 'Failed to delete lead');
+      const message = error instanceof Error ? error.message : 'Failed to delete lead';
+      setErrorMessage(message);
+      toast.error(message);
     } finally {
       setDeletingLeadId(null);
     }
@@ -126,8 +129,11 @@ export default function LeadsPage() {
       link.download = 'leads_export.xlsx';
       link.click();
       URL.revokeObjectURL(url);
+      toast.success('Leads downloaded successfully');
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : 'Failed to export leads');
+      const message = error instanceof Error ? error.message : 'Failed to export leads';
+      setErrorMessage(message);
+      toast.error(message);
     } finally {
       setExporting(false);
     }
@@ -158,7 +164,6 @@ export default function LeadsPage() {
     if (!importFile) return;
     try {
       setImporting(true);
-      setImportMessage('');
       const csvFile = await toCsvFile(importFile);
       const formData = new FormData();
       formData.append('file', csvFile);
@@ -171,11 +176,18 @@ export default function LeadsPage() {
       if (!response.ok) {
         throw new Error(payload.error || 'Import failed');
       }
-      setImportMessage(payload.message || 'Import completed.');
+      const failedRows = payload.failedRows ?? 0;
+      const message = payload.message || 'Import completed.';
+      if (failedRows > 0) {
+        toast.warning(message);
+      } else {
+        toast.success(message);
+      }
       await loadLeads();
       setImportFile(null);
+      setShowImportModal(false);
     } catch (error) {
-      setImportMessage(error instanceof Error ? error.message : 'Import failed');
+      toast.error(error instanceof Error ? error.message : 'Import failed');
     } finally {
       setImporting(false);
     }
@@ -271,11 +283,16 @@ export default function LeadsPage() {
         <div className="flex gap-2">
           <Input
             className="max-w-64"
-            placeholder="Search by name, email, business"
+            placeholder="Search by name, email, mobile, business"
             value={searchInput}
             onChange={(event) => setSearchInput(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                setAppliedSearch(searchInput);
+              }
+            }}
           />
-          <Button variant="ghost" onClick={() => setAppliedSearch(searchInput)}>
+          <Button variant="ghost" onClick={() => setAppliedSearch(searchInput.trim())}>
             Search
           </Button>
         </div>
@@ -327,7 +344,6 @@ export default function LeadsPage() {
             accept=".csv,.xlsx,.xls"
             onChange={(event) => setImportFile(event.target.files?.[0] || null)}
           />
-          {importMessage ? <p className="text-sm text-[var(--muted)]">{importMessage}</p> : null}
         </div>
       </Modal>
 

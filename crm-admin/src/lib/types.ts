@@ -11,7 +11,7 @@ export interface Lead {
   id: string;
   fullName: string;
   email: string;
-  whatsapp?: string | null;
+  whatsapp: string;
   businessName?: string | null;
   serviceInterest?: string | null;
   message?: string | null;

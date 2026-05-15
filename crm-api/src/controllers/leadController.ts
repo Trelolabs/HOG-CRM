@@ -9,8 +9,10 @@ export const createLead = async (req: Request, res: Response) => {
     try {
         const { fullName, email, whatsapp, businessName, serviceInterest, message } = req.body;
 
-        if (!fullName || !email) {
-            return res.status(400).json({ error: 'Full name and email are required' });
+        const whatsappValue = String(whatsapp || req.body.phone || req.body.mobile || '').trim();
+
+        if (!fullName || !email || !whatsappValue) {
+            return res.status(400).json({ error: 'Full name, email, and mobile number are required' });
         }
         if (!isValidEmail(email)) {
             return res.status(400).json({ error: 'Invalid email format' });
@@ -20,7 +22,7 @@ export const createLead = async (req: Request, res: Response) => {
             data: {
                 fullName: String(fullName).trim(),
                 email: String(email).trim().toLowerCase(),
-                whatsapp: whatsapp?.trim() || null,
+                whatsapp: whatsappValue,
                 businessName: businessName?.trim() || null,
                 serviceInterest: serviceInterest?.trim() || null,
                 message: message?.trim() || null,
@@ -61,7 +63,8 @@ export const getLeads = async (req: Request, res: Response) => {
                       OR: [
                           { fullName: { contains: search, mode: 'insensitive' as const } },
                           { email: { contains: search, mode: 'insensitive' as const } },
-                          { businessName: { contains: search, mode: 'insensitive' as const } }
+                          { businessName: { contains: search, mode: 'insensitive' as const } },
+                          { whatsapp: { contains: search, mode: 'insensitive' as const } }
                       ]
                   }
                 : {})
