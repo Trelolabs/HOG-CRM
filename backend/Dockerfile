@@ -1,22 +1,16 @@
 # Stage 1: Build the application
 FROM node:20-alpine AS builder
 
-# Set working directory
 WORKDIR /app
 
-# Copy package.json and package-lock.json (if available)
+# Copy package files and install ALL dependencies (including dev for build)
 COPY package*.json ./
-
-# Install dependencies (including devDependencies needed for build)
 RUN npm install
 
-# Copy the rest of the application code
+# Copy source code
 COPY . .
 
-# Generate Prisma Client
-RUN npx prisma generate
-
-# Build the TypeScript code
+# Generate Prisma Client and build TypeScript
 RUN npm run build
 
 
@@ -25,29 +19,25 @@ FROM node:20-alpine AS runner
 
 WORKDIR /app
 
-# Set Node environment to production
 ENV NODE_ENV=production
 
-# Copy package.json and install only production dependencies
+# Copy package files and Prisma schema
 COPY package*.json ./
-RUN npm install --omit=dev
+COPY prisma ./prisma
 
-# Copy the built application from the builder stage
+# Install production deps and regenerate Prisma Client for this platform
+# (Prisma native binaries are OS/arch-specific, must regenerate in final image)
+RUN npm install --omit=dev && npx prisma generate
+
+# Copy the compiled TypeScript output from builder
 COPY --from=builder /app/dist ./dist
 
-# Copy the generated Prisma client from the builder stage
-# (Prisma client needs the schema and engines)
-COPY --from=builder /app/prisma ./prisma
-COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
-COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
-
 # Create uploads directory (used by multer)
-RUN mkdir uploads
+RUN mkdir -p uploads
 
-# Expose the port the app runs on (assuming 3000, adjust if different)
-EXPOSE 3000
+# Railway injects PORT at runtime as an environment variable.
+# Do NOT hardcode EXPOSE - Railway reads the PORT env var directly.
+# The app reads process.env.PORT, Railway sets this automatically to 8080 or similar.
 
 # Start the application
-# Use a script to run migrations before starting if needed, 
-# for now we'll just start the node app.
 CMD ["npm", "start"]
