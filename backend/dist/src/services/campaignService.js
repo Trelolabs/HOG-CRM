@@ -1,10 +1,9 @@
 import { CampaignType } from '@prisma/client';
 import prisma from '../utils/prisma';
 import { SendGridProvider } from './providers/sendgridProvider';
-import { TwilioProvider } from './providers/twilioProvider';
 const providerMode = (process.env.CAMPAIGN_PROVIDER_MODE || 'mock').toLowerCase();
 const getMissingEnvVarsForLiveMode = () => {
-    const required = ['SENDGRID_API_KEY', 'SENDGRID_FROM_EMAIL', 'TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN', 'TWILIO_PHONE_NUMBER'];
+    const required = ['SENDGRID_API_KEY', 'SENDGRID_FROM_EMAIL']; //Let's add 't'TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN', 'TWILIO_PHONE_NUMBER' later
     return required.filter((key) => !process.env[key]);
 };
 const createProviders = () => {
@@ -24,12 +23,19 @@ const createProviders = () => {
     }
     return {
         emailProvider: new SendGridProvider(String(process.env.SENDGRID_API_KEY), String(process.env.SENDGRID_FROM_EMAIL)),
-        smsProvider: new TwilioProvider(String(process.env.TWILIO_ACCOUNT_SID), String(process.env.TWILIO_AUTH_TOKEN), String(process.env.TWILIO_PHONE_NUMBER))
+        smsProvider: null
+        // smsProvider: new TwilioProvider(
+        //     String(process.env.TWILIO_ACCOUNT_SID),
+        //     String(process.env.TWILIO_AUTH_TOKEN),
+        //     String(process.env.TWILIO_PHONE_NUMBER)
+        // )
     };
 };
 const sendEmailCampaign = async (segmentId, subject, content, emailProvider) => {
     const recipients = await prisma.lead.findMany({
-        where: { segmentId, NOT: { email: '' } },
+        where: { segmentId, email: {
+                not: ''
+            } },
         select: { email: true }
     });
     if (recipients.length === 0) {
@@ -100,10 +106,10 @@ export const sendCampaignWithProvider = async (campaignId) => {
             campaign
         };
     }
-    const { emailProvider, smsProvider } = createProviders();
+    const { emailProvider } = createProviders();
     const result = campaign.type === CampaignType.EMAIL
-        ? await sendEmailCampaign(campaign.segmentId, campaign.subject || campaign.name, campaign.content, emailProvider)
-        : await sendSmsCampaign(campaign.segmentId, campaign.content, smsProvider);
+        ? await sendEmailCampaign(campaign.segmentId, campaign.subject || campaign.name, campaign.content, emailProvider) : null;
+    // : await sendSmsCampaign(campaign.segmentId, campaign.content, smsProvider);
     const updatedCampaign = await prisma.campaign.update({
         where: { id: campaign.id },
         data: {

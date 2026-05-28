@@ -23,9 +23,10 @@ export const importCSV = async (req, res) => {
         rows.forEach((row, index) => {
             const fullName = (row.fullName || row.name || '').trim();
             const email = (row.email || '').trim().toLowerCase();
+            const whatsapp = (row.whatsapp || row.phone || row.mobile || '').trim();
             const statusValue = (row.status || 'NEW').trim().toUpperCase();
-            if (!fullName || !email) {
-                errors.push({ row: index + 2, error: 'fullName/name and email are required' });
+            if (!fullName || !email || !whatsapp) {
+                errors.push({ row: index + 2, error: 'fullName/name, email, and whatsapp/phone/mobile are required' });
                 return;
             }
             if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
@@ -42,7 +43,7 @@ export const importCSV = async (req, res) => {
             preparedRows.push({
                 fullName,
                 email,
-                whatsapp: (row.whatsapp || row.phone || '').trim() || undefined,
+                whatsapp,
                 businessName: (row.businessName || row.company || '').trim() || undefined,
                 serviceInterest: (row.serviceInterest || '').trim() || undefined,
                 message: (row.message || '').trim() || undefined,
