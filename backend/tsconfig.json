@@ -1,8 +1,9 @@
 {
   "compilerOptions": {
     "target": "ESNext",
-    "module": "ESNext",
-    "moduleResolution": "Bundler",
+    "module": "CommonJS",
+    "moduleResolution": "Node",
+    "ignoreDeprecations": "6.0",
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
     "strict": false,

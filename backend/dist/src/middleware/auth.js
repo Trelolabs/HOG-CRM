@@ -1,4 +1,7 @@
-export const authenticate = (req, res, next) => {
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.authenticate = void 0;
+const authenticate = (req, res, next) => {
     const authHeader = req.headers.authorization;
     const adminUser = process.env.CRM_ADMIN_USERNAME;
     const adminPass = process.env.CRM_ADMIN_PASSWORD;
@@ -18,3 +21,4 @@ export const authenticate = (req, res, next) => {
         return res.status(403).json({ error: 'Access Denied: Invalid credentials' });
     }
 };
+exports.authenticate = authenticate;
