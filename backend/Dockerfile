@@ -3,14 +3,12 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# Copy package files and install ALL dependencies (including dev for build)
+# Install deps first (cached layer — only re-runs if package.json changes)
 COPY package*.json ./
-RUN npm install
+RUN npm ci
 
-# Copy source code
+# Copy source and build
 COPY . .
-
-# Generate Prisma Client and build TypeScript
 RUN npm run build
 
 
@@ -25,9 +23,9 @@ ENV NODE_ENV=production
 COPY package*.json ./
 COPY prisma ./prisma
 
-# Install production deps and regenerate Prisma Client for this platform
-# (Prisma native binaries are OS/arch-specific, must regenerate in final image)
-RUN npm install --omit=dev && npx prisma generate
+# Use npm ci for faster, reproducible installs
+# Regenerate Prisma Client for the correct Linux/Alpine platform
+RUN npm ci --omit=dev && npx prisma generate
 
 # Copy the compiled TypeScript output from builder
 COPY --from=builder /app/dist ./dist
@@ -35,9 +33,7 @@ COPY --from=builder /app/dist ./dist
 # Create uploads directory (used by multer)
 RUN mkdir -p uploads
 
-# Fly.io routes external HTTPS traffic to port 8080 inside the container
-# and automatically injects PORT=8080 as an environment variable at runtime.
+# Fly.io routes external HTTPS traffic to port 8080
 EXPOSE 8080
 
-# Start the application
 CMD ["npm", "start"]

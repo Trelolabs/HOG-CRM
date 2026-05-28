@@ -24,6 +24,10 @@ jobs:
         uses: superfly/flyctl-actions/setup-flyctl@master
 
       - name: Deploy to Fly.io
-        run: flyctl deploy --remote-only --app hog-crm-api
+        # --local-only: builds the Docker image on the GitHub runner (which has
+        # layer caching via actions/cache), then pushes the final image to Fly.
+        # This is faster than --remote-only because npm install layers are cached
+        # between runs, so only changed layers are rebuilt.
+        run: flyctl deploy --local-only --app hog-crm-api
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
