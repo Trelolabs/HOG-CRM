@@ -1,20 +1,27 @@
-import prisma from '../utils/prisma';
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.deleteLead = exports.updateLead = exports.getLeads = exports.createLead = void 0;
+const prisma_1 = __importDefault(require("../utils/prisma"));
 const LEAD_STATUSES = ['NEW', 'QUALIFIED', 'CONTACTED', 'CLOSED'];
 const isValidEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-export const createLead = async (req, res) => {
+const createLead = async (req, res) => {
     try {
         const { fullName, email, whatsapp, businessName, serviceInterest, message } = req.body;
-        if (!fullName || !email) {
-            return res.status(400).json({ error: 'Full name and email are required' });
+        const whatsappValue = String(whatsapp || req.body.phone || req.body.mobile || '').trim();
+        if (!fullName || !email || !whatsappValue) {
+            return res.status(400).json({ error: 'Full name, email, and mobile number are required' });
         }
         if (!isValidEmail(email)) {
             return res.status(400).json({ error: 'Invalid email format' });
         }
-        const lead = await prisma.lead.create({
+        const lead = await prisma_1.default.lead.create({
             data: {
                 fullName: String(fullName).trim(),
                 email: String(email).trim().toLowerCase(),
-                whatsapp: whatsapp?.trim() || null,
+                whatsapp: whatsappValue,
                 businessName: businessName?.trim() || null,
                 serviceInterest: serviceInterest?.trim() || null,
                 message: message?.trim() || null,
@@ -30,7 +37,8 @@ export const createLead = async (req, res) => {
         res.status(500).json({ error: 'Internal Server Error', details: error.message });
     }
 };
-export const getLeads = async (req, res) => {
+exports.createLead = createLead;
+const getLeads = async (req, res) => {
     try {
         const page = Math.max(1, Number(req.query.page || 1));
         const limit = Math.min(100, Math.max(1, Number(req.query.limit || 20)));
@@ -52,20 +60,21 @@ export const getLeads = async (req, res) => {
                     OR: [
                         { fullName: { contains: search, mode: 'insensitive' } },
                         { email: { contains: search, mode: 'insensitive' } },
-                        { businessName: { contains: search, mode: 'insensitive' } }
+                        { businessName: { contains: search, mode: 'insensitive' } },
+                        { whatsapp: { contains: search, mode: 'insensitive' } }
                     ]
                 }
                 : {})
         };
         const [leads, total] = await Promise.all([
-            prisma.lead.findMany({
+            prisma_1.default.lead.findMany({
                 where,
                 include: { segment: true },
                 orderBy: { [sortBy]: sortOrder },
                 skip: (page - 1) * limit,
                 take: limit
             }),
-            prisma.lead.count({ where })
+            prisma_1.default.lead.count({ where })
         ]);
         res.json({
             data: leads,
@@ -81,7 +90,8 @@ export const getLeads = async (req, res) => {
         res.status(500).json({ error: 'Failed to fetch leads' });
     }
 };
-export const updateLead = async (req, res) => {
+exports.getLeads = getLeads;
+const updateLead = async (req, res) => {
     const { id } = req.params;
     const { status, segmentId } = req.body;
     try {
@@ -92,12 +102,12 @@ export const updateLead = async (req, res) => {
             return res.status(400).json({ error: `Invalid status. Allowed: ${LEAD_STATUSES.join(', ')}` });
         }
         if (segmentId) {
-            const segment = await prisma.segment.findUnique({ where: { id: String(segmentId) } });
+            const segment = await prisma_1.default.segment.findUnique({ where: { id: String(segmentId) } });
             if (!segment) {
                 return res.status(404).json({ error: 'Segment not found' });
             }
         }
-        const lead = await prisma.lead.update({
+        const lead = await prisma_1.default.lead.update({
             where: { id: id },
             data: {
                 ...(status ? { status: String(status).toUpperCase() } : {}),
@@ -116,10 +126,11 @@ export const updateLead = async (req, res) => {
         res.status(500).json({ error: 'Failed to update lead', details: error.message });
     }
 };
-export const deleteLead = async (req, res) => {
+exports.updateLead = updateLead;
+const deleteLead = async (req, res) => {
     const { id } = req.params;
     try {
-        await prisma.lead.delete({ where: { id: id } });
+        await prisma_1.default.lead.delete({ where: { id: id } });
         res.status(204).send();
     }
     catch (error) {
@@ -129,3 +140,4 @@ export const deleteLead = async (req, res) => {
         res.status(500).json({ error: 'Failed to delete lead', details: error.message });
     }
 };
+exports.deleteLead = deleteLead;

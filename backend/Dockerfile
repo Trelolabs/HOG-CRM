@@ -1,22 +1,14 @@
 # Stage 1: Build the application
 FROM node:20-alpine AS builder
 
-# Set working directory
 WORKDIR /app
 
-# Copy package.json and package-lock.json (if available)
+# Install ALL deps (including dev - needed for prisma CLI + tsc)
 COPY package*.json ./
+RUN npm ci
 
-# Install dependencies (including devDependencies needed for build)
-RUN npm install
-
-# Copy the rest of the application code
+# Copy source and build (runs prisma generate + tsc via build script)
 COPY . .
-
-# Generate Prisma Client
-RUN npx prisma generate
-
-# Build the TypeScript code
 RUN npm run build
 
 
@@ -25,29 +17,26 @@ FROM node:20-alpine AS runner
 
 WORKDIR /app
 
-# Set Node environment to production
 ENV NODE_ENV=production
 
-# Copy package.json and install only production dependencies
 COPY package*.json ./
-RUN npm install --omit=dev
+COPY prisma ./prisma
 
-# Copy the built application from the builder stage
+# Install only production runtime deps (no prisma CLI - avoids npx pulling Prisma 7)
+RUN npm ci --omit=dev
+
+# Copy compiled app from builder
 COPY --from=builder /app/dist ./dist
 
-# Copy the generated Prisma client from the builder stage
-# (Prisma client needs the schema and engines)
-COPY --from=builder /app/prisma ./prisma
+# Copy the already-generated Prisma client from builder (Prisma 6, correct version)
+# This avoids running npx prisma generate again which would pull the latest (v7) CLI
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
 
 # Create uploads directory (used by multer)
-RUN mkdir uploads
+RUN mkdir -p uploads
 
-# Expose the port the app runs on (assuming 3000, adjust if different)
-EXPOSE 3000
+# Fly.io routes external HTTPS traffic to port 8080
+EXPOSE 8080
 
-# Start the application
-# Use a script to run migrations before starting if needed, 
-# for now we'll just start the node app.
 CMD ["npm", "start"]

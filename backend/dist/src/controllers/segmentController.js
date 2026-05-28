@@ -1,7 +1,13 @@
-import prisma from '../utils/prisma';
-export const getSegments = async (req, res) => {
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.deleteSegment = exports.updateSegment = exports.createSegment = exports.getSegments = void 0;
+const prisma_1 = __importDefault(require("../utils/prisma"));
+const getSegments = async (req, res) => {
     try {
-        const segments = await prisma.segment.findMany({
+        const segments = await prisma_1.default.segment.findMany({
             include: { _count: { select: { leads: true } } }
         });
         res.json(segments);
@@ -10,13 +16,14 @@ export const getSegments = async (req, res) => {
         res.status(500).json({ error: 'Failed to fetch segments' });
     }
 };
-export const createSegment = async (req, res) => {
+exports.getSegments = getSegments;
+const createSegment = async (req, res) => {
     const { name, description } = req.body;
     if (!name || !String(name).trim()) {
         return res.status(400).json({ error: 'Segment name is required' });
     }
     try {
-        const segment = await prisma.segment.create({
+        const segment = await prisma_1.default.segment.create({
             data: { name: String(name).trim(), description: description?.trim() || null }
         });
         res.status(201).json(segment);
@@ -28,7 +35,8 @@ export const createSegment = async (req, res) => {
         res.status(500).json({ error: 'Failed to create segment', details: error.message });
     }
 };
-export const updateSegment = async (req, res) => {
+exports.createSegment = createSegment;
+const updateSegment = async (req, res) => {
     const { id } = req.params;
     const { name, description } = req.body;
     if (typeof name === 'undefined' && typeof description === 'undefined') {
@@ -38,7 +46,7 @@ export const updateSegment = async (req, res) => {
         return res.status(400).json({ error: 'Segment name is required' });
     }
     try {
-        const segment = await prisma.segment.update({
+        const segment = await prisma_1.default.segment.update({
             where: { id: String(id) },
             data: {
                 ...(typeof name !== 'undefined' ? { name: String(name).trim() } : {}),
@@ -59,18 +67,19 @@ export const updateSegment = async (req, res) => {
         res.status(500).json({ error: 'Failed to update segment', details: error.message });
     }
 };
-export const deleteSegment = async (req, res) => {
+exports.updateSegment = updateSegment;
+const deleteSegment = async (req, res) => {
     const { id } = req.params;
     try {
-        await prisma.$transaction([
-            prisma.lead.updateMany({
+        await prisma_1.default.$transaction([
+            prisma_1.default.lead.updateMany({
                 where: { segmentId: String(id) },
                 data: { segmentId: null }
             }),
-            prisma.campaign.deleteMany({
+            prisma_1.default.campaign.deleteMany({
                 where: { segmentId: String(id) }
             }),
-            prisma.segment.delete({
+            prisma_1.default.segment.delete({
                 where: { id: String(id) }
             })
         ]);
@@ -87,3 +96,4 @@ export const deleteSegment = async (req, res) => {
         res.status(500).json({ error: 'Failed to delete segment', details: error.message });
     }
 };
+exports.deleteSegment = deleteSegment;

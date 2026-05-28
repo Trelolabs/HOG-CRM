@@ -1,10 +1,15 @@
-import { CampaignType } from '@prisma/client';
-import prisma from '../utils/prisma';
-import { SendGridProvider } from './providers/sendgridProvider';
-import { TwilioProvider } from './providers/twilioProvider';
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.validateCampaignProviderConfig = exports.sendCampaignWithProvider = void 0;
+const client_1 = require("@prisma/client");
+const prisma_1 = __importDefault(require("../utils/prisma"));
+const sendgridProvider_1 = require("./providers/sendgridProvider");
 const providerMode = (process.env.CAMPAIGN_PROVIDER_MODE || 'mock').toLowerCase();
 const getMissingEnvVarsForLiveMode = () => {
-    const required = ['SENDGRID_API_KEY', 'SENDGRID_FROM_EMAIL', 'TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN', 'TWILIO_PHONE_NUMBER'];
+    const required = ['SENDGRID_API_KEY', 'SENDGRID_FROM_EMAIL']; //Let's add 't'TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN', 'TWILIO_PHONE_NUMBER' later
     return required.filter((key) => !process.env[key]);
 };
 const createProviders = () => {
@@ -23,13 +28,20 @@ const createProviders = () => {
         throw new Error(`Live provider mode is missing environment variables: ${missingVars.join(', ')}`);
     }
     return {
-        emailProvider: new SendGridProvider(String(process.env.SENDGRID_API_KEY), String(process.env.SENDGRID_FROM_EMAIL)),
-        smsProvider: new TwilioProvider(String(process.env.TWILIO_ACCOUNT_SID), String(process.env.TWILIO_AUTH_TOKEN), String(process.env.TWILIO_PHONE_NUMBER))
+        emailProvider: new sendgridProvider_1.SendGridProvider(String(process.env.SENDGRID_API_KEY), String(process.env.SENDGRID_FROM_EMAIL)),
+        smsProvider: null
+        // smsProvider: new TwilioProvider(
+        //     String(process.env.TWILIO_ACCOUNT_SID),
+        //     String(process.env.TWILIO_AUTH_TOKEN),
+        //     String(process.env.TWILIO_PHONE_NUMBER)
+        // )
     };
 };
 const sendEmailCampaign = async (segmentId, subject, content, emailProvider) => {
-    const recipients = await prisma.lead.findMany({
-        where: { segmentId, NOT: { email: '' } },
+    const recipients = await prisma_1.default.lead.findMany({
+        where: { segmentId, email: {
+                not: ''
+            } },
         select: { email: true }
     });
     if (recipients.length === 0) {
@@ -57,7 +69,7 @@ const sendEmailCampaign = async (segmentId, subject, content, emailProvider) => 
     };
 };
 const sendSmsCampaign = async (segmentId, content, smsProvider) => {
-    const recipients = await prisma.lead.findMany({
+    const recipients = await prisma_1.default.lead.findMany({
         where: { segmentId, whatsapp: { not: null } },
         select: { whatsapp: true }
     });
@@ -84,8 +96,8 @@ const sendSmsCampaign = async (segmentId, content, smsProvider) => {
         failureReason: failedResults.length ? `${failedResults.length} SMS sends failed` : null
     };
 };
-export const sendCampaignWithProvider = async (campaignId) => {
-    const campaign = await prisma.campaign.findUnique({
+const sendCampaignWithProvider = async (campaignId) => {
+    const campaign = await prisma_1.default.campaign.findUnique({
         where: { id: campaignId },
         include: { segment: true }
     });
@@ -100,11 +112,11 @@ export const sendCampaignWithProvider = async (campaignId) => {
             campaign
         };
     }
-    const { emailProvider, smsProvider } = createProviders();
-    const result = campaign.type === CampaignType.EMAIL
-        ? await sendEmailCampaign(campaign.segmentId, campaign.subject || campaign.name, campaign.content, emailProvider)
-        : await sendSmsCampaign(campaign.segmentId, campaign.content, smsProvider);
-    const updatedCampaign = await prisma.campaign.update({
+    const { emailProvider } = createProviders();
+    const result = campaign.type === client_1.CampaignType.EMAIL
+        ? await sendEmailCampaign(campaign.segmentId, campaign.subject || campaign.name, campaign.content, emailProvider) : null;
+    // : await sendSmsCampaign(campaign.segmentId, campaign.content, smsProvider);
+    const updatedCampaign = await prisma_1.default.campaign.update({
         where: { id: campaign.id },
         data: {
             status: result.status,
@@ -121,7 +133,8 @@ export const sendCampaignWithProvider = async (campaignId) => {
         campaign: updatedCampaign
     };
 };
-export const validateCampaignProviderConfig = () => {
+exports.sendCampaignWithProvider = sendCampaignWithProvider;
+const validateCampaignProviderConfig = () => {
     if (providerMode !== 'live')
         return;
     const missingVars = getMissingEnvVarsForLiveMode();
@@ -129,3 +142,4 @@ export const validateCampaignProviderConfig = () => {
         throw new Error(`Missing required environment variables for live campaign delivery: ${missingVars.join(', ')}`);
     }
 };
+exports.validateCampaignProviderConfig = validateCampaignProviderConfig;

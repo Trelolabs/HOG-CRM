@@ -1,8 +1,14 @@
-import prisma from '../utils/prisma';
-import { sendCampaignWithProvider } from '../services/campaignService';
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.sendCampaign = exports.updateCampaign = exports.getCampaigns = exports.createCampaign = void 0;
+const prisma_1 = __importDefault(require("../utils/prisma"));
+const campaignService_1 = require("../services/campaignService");
 const CAMPAIGN_TYPES = ['EMAIL', 'SMS'];
 const CAMPAIGN_STATUSES = ['DRAFT', 'SCHEDULED', 'SENT', 'FAILED'];
-export const createCampaign = async (req, res) => {
+const createCampaign = async (req, res) => {
     const { type, name, segmentId, content, subject } = req.body;
     if (!type || !name || !segmentId || !content) {
         return res.status(400).json({ error: 'type, name, segmentId and content are required' });
@@ -12,11 +18,11 @@ export const createCampaign = async (req, res) => {
         return res.status(400).json({ error: `Invalid campaign type. Allowed: ${CAMPAIGN_TYPES.join(', ')}` });
     }
     try {
-        const segment = await prisma.segment.findUnique({ where: { id: String(segmentId) } });
+        const segment = await prisma_1.default.segment.findUnique({ where: { id: String(segmentId) } });
         if (!segment) {
             return res.status(404).json({ error: 'Segment not found' });
         }
-        const campaign = await prisma.campaign.create({
+        const campaign = await prisma_1.default.campaign.create({
             data: {
                 type: normalizedType,
                 name: String(name).trim(),
@@ -33,14 +39,15 @@ export const createCampaign = async (req, res) => {
         res.status(500).json({ error: 'Failed to create campaign', details: error.message });
     }
 };
-export const getCampaigns = async (req, res) => {
+exports.createCampaign = createCampaign;
+const getCampaigns = async (req, res) => {
     try {
         const status = String(req.query.status || '').trim().toUpperCase();
         const segmentId = String(req.query.segmentId || '').trim();
         if (status && !CAMPAIGN_STATUSES.includes(status)) {
             return res.status(400).json({ error: `Invalid status. Allowed: ${CAMPAIGN_STATUSES.join(', ')}` });
         }
-        const campaigns = await prisma.campaign.findMany({
+        const campaigns = await prisma_1.default.campaign.findMany({
             where: {
                 ...(status ? { status } : {}),
                 ...(segmentId ? { segmentId } : {})
@@ -54,7 +61,8 @@ export const getCampaigns = async (req, res) => {
         res.status(500).json({ error: 'Failed to fetch campaigns', details: error.message });
     }
 };
-export const updateCampaign = async (req, res) => {
+exports.getCampaigns = getCampaigns;
+const updateCampaign = async (req, res) => {
     const { id } = req.params;
     const { type, name, segmentId, content, subject, status } = req.body;
     if (typeof type === 'undefined' &&
@@ -75,12 +83,12 @@ export const updateCampaign = async (req, res) => {
     }
     try {
         if (segmentId) {
-            const segment = await prisma.segment.findUnique({ where: { id: String(segmentId) } });
+            const segment = await prisma_1.default.segment.findUnique({ where: { id: String(segmentId) } });
             if (!segment) {
                 return res.status(404).json({ error: 'Segment not found' });
             }
         }
-        const campaign = await prisma.campaign.update({
+        const campaign = await prisma_1.default.campaign.update({
             where: { id: String(id) },
             data: {
                 ...(normalizedType ? { type: normalizedType } : {}),
@@ -101,10 +109,11 @@ export const updateCampaign = async (req, res) => {
         res.status(500).json({ error: 'Failed to update campaign', details: error.message });
     }
 };
-export const sendCampaign = async (req, res) => {
+exports.updateCampaign = updateCampaign;
+const sendCampaign = async (req, res) => {
     const { id } = req.params;
     try {
-        const result = await sendCampaignWithProvider(String(id));
+        const result = await (0, campaignService_1.sendCampaignWithProvider)(String(id));
         res.json({
             message: `Campaign processed with ${result.mode} provider mode`,
             campaign: result.campaign
@@ -117,3 +126,4 @@ export const sendCampaign = async (req, res) => {
         res.status(500).json({ error: 'Failed to send campaign', details: error.message });
     }
 };
+exports.sendCampaign = sendCampaign;

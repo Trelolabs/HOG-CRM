@@ -1,9 +1,15 @@
-import twilio from 'twilio';
-export class TwilioProvider {
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.TwilioProvider = void 0;
+const twilio_1 = __importDefault(require("twilio"));
+class TwilioProvider {
     client;
     fromPhoneNumber;
     constructor(accountSid, authToken, fromPhoneNumber) {
-        this.client = twilio(accountSid, authToken);
+        this.client = (0, twilio_1.default)(accountSid, authToken);
         this.fromPhoneNumber = fromPhoneNumber;
     }
     async sendSms(payload) {
@@ -15,3 +21,4 @@ export class TwilioProvider {
         return { providerMessageId: response.sid };
     }
 }
+exports.TwilioProvider = TwilioProvider;
