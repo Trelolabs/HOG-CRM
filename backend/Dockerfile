@@ -35,9 +35,9 @@ COPY --from=builder /app/dist ./dist
 # Create uploads directory (used by multer)
 RUN mkdir -p uploads
 
-# Railway injects PORT at runtime as an environment variable.
-# Do NOT hardcode EXPOSE - Railway reads the PORT env var directly.
-# The app reads process.env.PORT, Railway sets this automatically to 8080 or similar.
+# Fly.io routes external HTTPS traffic to port 8080 inside the container
+# and automatically injects PORT=8080 as an environment variable at runtime.
+EXPOSE 8080
 
 # Start the application
 CMD ["npm", "start"]
