@@ -35,4 +35,16 @@ export interface Campaign {
   attemptedRecipients?: number;
   sentRecipients?: number;
   segment?: Segment;
+  attachments?: any[] | null;
+}
+
+export interface Attachment {
+  filename: string;
+  content: string; // base64
+}
+
+export interface ComposeData {
+  subject: string;
+  content: string;
+  attachments: Attachment[];
 }

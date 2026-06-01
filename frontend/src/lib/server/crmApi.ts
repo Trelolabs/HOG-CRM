@@ -1,6 +1,6 @@
 import { cookies } from 'next/headers';
 
-const DEFAULT_API_URL = 'http://localhost:4000';
+const DEFAULT_API_URL = 'http://127.0.0.1:8080';
 
 function getAuthHeader() {
   const username = process.env.CRM_ADMIN_USERNAME || '';
