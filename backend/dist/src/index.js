@@ -13,6 +13,9 @@ if (missingEnvVars.length > 0) {
     throw new Error(`Missing required environment variables: ${missingEnvVars.join(', ')}`);
 }
 (0, campaignService_1.validateCampaignProviderConfig)();
+// Initialize Workers
+require("./workers/uploadWorker");
+require("./workers/emailWorker");
 const port = Number(process.env.PORT || 4000);
 const app = (0, app_1.createApp)();
 app.listen(port, '0.0.0.0', () => {

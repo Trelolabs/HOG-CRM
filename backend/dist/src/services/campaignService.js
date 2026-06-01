@@ -37,7 +37,8 @@ const createProviders = () => {
         // )
     };
 };
-const sendEmailCampaign = async (segmentId, subject, content, emailProvider) => {
+const queues_1 = require("../queues");
+const sendEmailCampaign = async (segmentId, subject, content) => {
     const recipients = await prisma_1.default.lead.findMany({
         where: { segmentId, email: {
                 not: ''
@@ -53,19 +54,22 @@ const sendEmailCampaign = async (segmentId, subject, content, emailProvider) => 
             failureReason: 'No email recipients available in selected segment'
         };
     }
-    const settled = await Promise.allSettled(recipients.map((recipient) => emailProvider.sendEmail({
-        to: String(recipient.email),
-        subject,
-        html: content
-    })));
-    const successResults = settled.filter((entry) => entry.status === 'fulfilled');
-    const failedResults = settled.filter((entry) => entry.status === 'rejected');
+    // Add jobs to queue
+    const jobs = recipients.map(recipient => ({
+        name: 'sendEmail',
+        data: {
+            to: String(recipient.email),
+            subject,
+            html: content
+        }
+    }));
+    await queues_1.emailQueue.addBulk(jobs);
     return {
-        status: successResults.length > 0 ? 'SENT' : 'FAILED',
+        status: 'SCHEDULED', // Using standard prisma status for scheduled
         attemptedRecipients: recipients.length,
-        sentRecipients: successResults.length,
-        providerMessageId: successResults[0]?.value.providerMessageId || null,
-        failureReason: failedResults.length ? `${failedResults.length} email sends failed` : null
+        sentRecipients: 0,
+        providerMessageId: null,
+        failureReason: null
     };
 };
 const sendSmsCampaign = async (segmentId, content, smsProvider) => {
@@ -114,7 +118,7 @@ const sendCampaignWithProvider = async (campaignId) => {
     }
     const { emailProvider } = createProviders();
     const result = campaign.type === client_1.CampaignType.EMAIL
-        ? await sendEmailCampaign(campaign.segmentId, campaign.subject || campaign.name, campaign.content, emailProvider) : null;
+        ? await sendEmailCampaign(campaign.segmentId, campaign.subject || campaign.name, campaign.content) : null;
     // : await sendSmsCampaign(campaign.segmentId, campaign.content, smsProvider);
     const updatedCampaign = await prisma_1.default.campaign.update({
         where: { id: campaign.id },
