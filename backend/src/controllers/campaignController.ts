@@ -199,6 +199,13 @@ export const sendToLeads = async (req: Request, res: Response) => {
         await emailQueue.addBulk(jobs);
         console.log(`[SendToLeads] Enqueued ${jobs.length} jobs to emailQueue`);
 
+        // Mark leads as CONTACTED (email attempted)
+        await prisma.lead.updateMany({
+            where: { id: { in: leadIds } },
+            data: { status: 'CONTACTED' }
+        });
+        console.log(`[SendToLeads] Marked ${leadIds.length} leads as CONTACTED`);
+
         // Update campaign
         await prisma.campaign.update({
             where: { id: campaign.id },

@@ -41,7 +41,7 @@ exports.createLead = createLead;
 const getLeads = async (req, res) => {
     try {
         const page = Math.max(1, Number(req.query.page || 1));
-        const limit = Math.min(100, Math.max(1, Number(req.query.limit || 20)));
+        const limit = Math.min(10000, Math.max(1, Number(req.query.limit || 20)));
         const search = String(req.query.search || '').trim();
         const status = String(req.query.status || '').trim().toUpperCase();
         const segmentId = String(req.query.segmentId || '').trim();
