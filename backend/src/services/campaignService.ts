@@ -9,7 +9,7 @@ type ProviderMode = 'mock' | 'live';
 const providerMode = (process.env.CAMPAIGN_PROVIDER_MODE || 'mock').toLowerCase() as ProviderMode;
 
 const getMissingEnvVarsForLiveMode = () => {
-    const required = ['SENDGRID_API_KEY', 'SENDGRID_FROM_EMAIL']; //Let's add 't'TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN', 'TWILIO_PHONE_NUMBER' later
+    const required = ['RESEND_API_KEY', 'EMAIL_FROM'];
     return required.filter((key) => !process.env[key]);
 };
 
@@ -31,13 +31,10 @@ const createProviders = (): { emailProvider: EmailProvider; smsProvider: SmsProv
     }
 
     return {
-        emailProvider: new SendGridProvider(String(process.env.SENDGRID_API_KEY), String(process.env.SENDGRID_FROM_EMAIL)),
+        emailProvider: {
+            sendEmail: async () => ({ providerMessageId: `resend-${Date.now()}` })
+        },
         smsProvider: null
-        // smsProvider: new TwilioProvider(
-        //     String(process.env.TWILIO_ACCOUNT_SID),
-        //     String(process.env.TWILIO_AUTH_TOKEN),
-        //     String(process.env.TWILIO_PHONE_NUMBER)
-        // )
     };
 
 
