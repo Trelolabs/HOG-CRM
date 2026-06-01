@@ -44,21 +44,22 @@ const createProviders = (): { emailProvider: EmailProvider; smsProvider: SmsProv
 };
 
 type CampaignSendResult = {
-    status: 'SENT' | 'FAILED';
+    status: 'SENT' | 'FAILED' | 'SCHEDULED';
     attemptedRecipients: number;
     sentRecipients: number;
     providerMessageId: string | null;
     failureReason: string | null;
 };
 
-const sendEmailCampaign = async (segmentId: string, subject: string, content: string, emailProvider: EmailProvider): Promise<CampaignSendResult> => {
+import { emailQueue } from '../queues';
+
+const sendEmailCampaign = async (segmentId: string, subject: string, content: string): Promise<CampaignSendResult> => {
     const recipients = await prisma.lead.findMany({
         where: { segmentId, email: {
             not: ''
         } },
         select: { email: true }
     });
-
 
     if (recipients.length === 0) {
         return {
@@ -70,25 +71,24 @@ const sendEmailCampaign = async (segmentId: string, subject: string, content: st
         };
     }
 
-    const settled = await Promise.allSettled(
-        recipients.map((recipient) =>
-            emailProvider.sendEmail({
-                to: String(recipient.email),
-                subject,
-                html: content
-            })
-        )
-    );
-
-    const successResults = settled.filter((entry): entry is PromiseFulfilledResult<{ providerMessageId: string }> => entry.status === 'fulfilled');
-    const failedResults = settled.filter((entry) => entry.status === 'rejected');
+    // Add jobs to queue
+    const jobs = recipients.map(recipient => ({
+        name: 'sendEmail',
+        data: {
+            to: String(recipient.email),
+            subject,
+            html: content
+        }
+    }));
+    
+    await emailQueue.addBulk(jobs);
 
     return {
-        status: successResults.length > 0 ? 'SENT' : 'FAILED',
+        status: 'SCHEDULED', // Using standard prisma status for scheduled
         attemptedRecipients: recipients.length,
-        sentRecipients: successResults.length,
-        providerMessageId: successResults[0]?.value.providerMessageId || null,
-        failureReason: failedResults.length ? `${failedResults.length} email sends failed` : null
+        sentRecipients: 0,
+        providerMessageId: null,
+        failureReason: null
     };
 };
 
@@ -151,7 +151,7 @@ export const sendCampaignWithProvider = async (campaignId: string) => {
     const { emailProvider } = createProviders();
     const result =
         campaign.type === CampaignType.EMAIL
-            ? await sendEmailCampaign(campaign.segmentId, campaign.subject || campaign.name, campaign.content, emailProvider) : null
+            ? await sendEmailCampaign(campaign.segmentId, campaign.subject || campaign.name, campaign.content) : null
             // : await sendSmsCampaign(campaign.segmentId, campaign.content, smsProvider);
 
     const updatedCampaign = await prisma.campaign.update({
