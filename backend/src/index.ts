@@ -12,6 +12,10 @@ if (missingEnvVars.length > 0) {
 }
 validateCampaignProviderConfig();
 
+// Initialize Workers
+import './workers/uploadWorker';
+import './workers/emailWorker';
+
 const port = Number(process.env.PORT || 4000);
 const app = createApp();
 
