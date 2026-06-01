@@ -275,7 +275,7 @@ export default function CampaignsPage() {
                       placeholder="Search emails..."
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      className="crm-input w-full pl-9 py-2"
+                      className="crm-input w-full !pl-10 py-2"
                     />
                   </div>
                   <Button onClick={() => setShowAddEmail(true)}>
