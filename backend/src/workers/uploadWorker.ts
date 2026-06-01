@@ -112,6 +112,9 @@ export const uploadWorker = new Worker('uploadQueue', async job => {
       console.log(`[UploadWorker] Extracted ${contacts.length} contacts from CSV`);
     } else if (ext === '.xlsx' || ext === '.xls') {
       console.log(`[UploadWorker] Parsing Excel file: ${filePath}`);
+      if (!fs.existsSync(filePath)) {
+        throw new Error(`File not found: ${filePath}`);
+      }
       const workbook = xlsx.readFile(filePath);
       const sheetName = workbook.SheetNames[0];
       const sheet = workbook.Sheets[sheetName];
@@ -136,6 +139,14 @@ export const uploadWorker = new Worker('uploadQueue', async job => {
           }
         }
       });
+
+      // Fallback: if no headers matched, treat entire sheet as unstructured text
+      if (contacts.length === 0) {
+        console.log(`[UploadWorker] No headers found, scanning all cells for emails`);
+        const csvText = xlsx.utils.sheet_to_csv(sheet);
+        contacts = extractContactsFromText(csvText);
+      }
+
       console.log(`[UploadWorker] Extracted ${contacts.length} contacts from Excel`);
     } else if (ext === '.pdf') {
       console.log(`[UploadWorker] Extracting text from PDF: ${filePath}`);
