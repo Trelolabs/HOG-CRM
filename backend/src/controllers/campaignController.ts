@@ -280,6 +280,7 @@ export const getUploadStatus = async (req: Request, res: Response) => {
 };
 
 export const importContacts = async (req: Request, res: Response) => {
+    const t0 = Date.now();
     try {
         console.log('[Import] Starting import');
         const { contacts, segmentName } = req.body;
@@ -330,17 +331,20 @@ export const importContacts = async (req: Request, res: Response) => {
 
         // Check for duplicates
         console.log(`[Import] Checking for duplicates...`);
+        const t1 = Date.now();
         const emailsToImport = validContacts.map(c => {
             const email = c.email || c.Email || c['E-mail'] || '';
             return email.toString().toLowerCase().trim();
         });
 
+        const t2 = Date.now();
         const existingEmails = await prisma.lead.findMany({
             where: { email: { in: emailsToImport } },
             select: { email: true }
         });
+        const t3 = Date.now();
         const existingEmailSet = new Set(existingEmails.map(e => e.email?.toLowerCase()));
-        console.log(`[Import] Found ${existingEmailSet.size} existing emails`);
+        console.log(`[Import] Mapped emails: ${t2-t1}ms, DB query: ${t3-t2}ms, Found ${existingEmailSet.size} existing emails`);
 
         // Separate duplicates from new contacts
         const newContacts = [];
@@ -389,7 +393,8 @@ export const importContacts = async (req: Request, res: Response) => {
             });
         }
 
-        console.log(`[Import] Import complete. Imported: ${importedCount}, Duplicates: ${duplicates.length}`);
+        const elapsed = Date.now() - t0;
+        console.log(`[Import] Import complete. Imported: ${importedCount}, Duplicates: ${duplicates.length}. Total time: ${elapsed}ms`);
         res.status(201).json({
             message: `Imported ${importedCount} contacts. ${duplicates.length} already exist.`,
             segmentId,
@@ -397,7 +402,8 @@ export const importContacts = async (req: Request, res: Response) => {
             duplicates: duplicates.length,
         });
     } catch (error: any) {
-        console.error('[Import] Error:', error);
+        const elapsed = Date.now() - t0;
+        console.error(`[Import] Error after ${elapsed}ms:`, error);
         res.status(500).json({ error: 'Failed to import contacts', details: error.message });
     }
 };
