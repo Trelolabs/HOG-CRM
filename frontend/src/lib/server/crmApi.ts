@@ -24,6 +24,7 @@ export async function crmApiFetch(path: string, init?: RequestInit) {
       Authorization: getAuthHeader(),
     },
     cache: 'no-store',
+    signal: AbortSignal.timeout(120_000),
   });
 
   return response;

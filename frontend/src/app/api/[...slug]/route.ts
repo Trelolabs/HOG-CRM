@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { crmApiFetch } from '@/lib/server/crmApi';
 import { cookies } from 'next/headers';
 
+export const maxDuration = 120; // seconds — allow long-running imports
+
 const publicRouteKey = 'POST:/api/leads';
 
 async function handleRequest(
