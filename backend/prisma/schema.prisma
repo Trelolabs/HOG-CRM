@@ -38,6 +38,7 @@ model Campaign {
   name        String
   subject     String?  // For emails
   content     String   @db.Text
+  attachments Json?    // Array of {filename, content: base64}
   segmentId   String
   segment     Segment  @relation(fields: [segmentId], references: [id])
   status      CampaignStatus @default(DRAFT)
