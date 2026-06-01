@@ -96,9 +96,14 @@ export default function CampaignsPage() {
   };
 
   const handleAddEmail = async () => {
+    if (!segmentId) {
+      toast.error('Select a list first');
+      return;
+    }
     const email = addEmailInput.trim().toLowerCase();
-    if (!email || !email.includes('@')) {
-      toast.error('Invalid email format');
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!email || !emailRegex.test(email)) {
+      toast.error('Enter valid email (e.g., user@example.com)');
       return;
     }
     setAddingEmail(true);
@@ -106,7 +111,7 @@ export default function CampaignsPage() {
       await apiClient.post('/api/campaigns/import', {
         contacts: [{ email, fullName: '', whatsapp: '' }],
         segmentName: segmentName || 'Manual',
-        segmentId: segmentId || undefined,
+        segmentId: segmentId,
       });
       const res = await apiClient.get<{ data: Lead[] }>(`/api/leads?segmentId=${segmentId}&limit=1000`);
       setContacts(res.data || []);
