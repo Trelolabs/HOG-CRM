@@ -18,6 +18,7 @@ interface UploadModalProps {
 export default function UploadModal({ open, onClose, onImported }: UploadModalProps) {
   const [uploading, setUploading] = useState(false);
   const [polling, setPolling] = useState(false);
+  const [importing, setImporting] = useState(false);
   const [segmentName, setSegmentName] = useState('');
   const [extractedCount, setExtractedCount] = useState(0);
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -95,6 +96,11 @@ export default function UploadModal({ open, onClose, onImported }: UploadModalPr
 
               // Import contacts
               const finalSegmentName = segmentName.trim() || autoSegmentName;
+              if (isMountedRef.current) {
+                setPolling(false);
+                setImporting(true);
+              }
+
               const importRes = await fetch('/api/campaigns/import', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -107,41 +113,32 @@ export default function UploadModal({ open, onClose, onImported }: UploadModalPr
               if (!importRes.ok) {
                 const importErr = await importRes.json();
                 toast.error(importErr.error || 'Import failed');
+                if (isMountedRef.current) {
+                  setImporting(false);
+                }
                 return;
               }
 
               const importData = await importRes.json();
+              const foundSegmentId = importData.segmentId;
 
-              // Fetch actual segments to get ID
-              const segmentsRes = await fetch('/api/segments');
-              if (!segmentsRes.ok) {
-                toast.error('Failed to fetch segments');
-                return;
-              }
-
-              const segments = await segmentsRes.json();
-              const segment = segments.find((s: any) => s.name === finalSegmentName);
-              const foundSegmentId = segment?.id || '';
-
-              // Fetch actual Lead records from database (critical!)
-              const leadsRes = await fetch(`/api/leads?segmentId=${foundSegmentId}`);
+              // Fetch actual Lead records from database (limit=1000 to show all imported)
+              const leadsRes = await fetch(`/api/leads?segmentId=${foundSegmentId}&limit=1000`);
               if (!leadsRes.ok) {
                 toast.error('Failed to fetch imported leads');
+                if (isMountedRef.current) {
+                  setImporting(false);
+                }
                 return;
               }
 
-              const leads: Lead[] = await leadsRes.json();
-
-              // Filter to only the newly imported ones (rough match by email from extraction)
-              const extractedEmails = new Set(extractedContacts.map((c: any) => c.email?.toLowerCase()));
-              const importedLeads = leads.filter((l: Lead) =>
-                extractedEmails.has(l.email?.toLowerCase())
-              );
+              const leadsData = await leadsRes.json();
+              const leads: Lead[] = leadsData.data || [];
 
               if (!isMountedRef.current) return;
 
               toast.success(`Imported ${importData.imported} contacts`);
-              onImported(importedLeads, finalSegmentName, foundSegmentId);
+              onImported(leads, finalSegmentName, foundSegmentId);
               onClose();
             } else if (statusData.state === 'failed') {
               clearTimeout(pollTimeout);
@@ -172,6 +169,7 @@ export default function UploadModal({ open, onClose, onImported }: UploadModalPr
     clearPolling();
     setUploading(false);
     setPolling(false);
+    setImporting(false);
     setSegmentName('');
     setExtractedCount(0);
     setTimeout(() => {
@@ -187,11 +185,11 @@ export default function UploadModal({ open, onClose, onImported }: UploadModalPr
       onClose={handleClose}
       footer={
         <div className="flex gap-2">
-          <Button variant="ghost" onClick={handleClose} disabled={uploading || polling}>
+          <Button variant="ghost" onClick={handleClose} disabled={uploading || polling || importing}>
             Cancel
           </Button>
-          <Button disabled={uploading || polling}>
-            {uploading ? 'Uploading...' : polling ? 'Processing...' : 'Import'}
+          <Button disabled={uploading || polling || importing}>
+            {uploading ? 'Uploading...' : polling ? 'Processing...' : importing ? 'Importing...' : 'Import'}
           </Button>
         </div>
       }
@@ -202,13 +200,13 @@ export default function UploadModal({ open, onClose, onImported }: UploadModalPr
           {...getRootProps()}
           className={`border-2 border-dashed rounded-xl p-10 text-center transition-all ${
             isDragActive ? 'border-blue-500 bg-blue-50/10' : 'border-gray-600 hover:border-gray-500'
-          } ${uploading || polling ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+          } ${uploading || polling || importing ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
         >
-          <input {...getInputProps()} disabled={uploading || polling} />
-          {uploading || polling ? (
+          <input {...getInputProps()} disabled={uploading || polling || importing} />
+          {uploading || polling || importing ? (
             <>
               <Loader className="w-12 h-12 text-blue-500 animate-spin mx-auto mb-2" />
-              <p className="text-gray-400">{uploading ? 'Uploading...' : 'Processing...'}</p>
+              <p className="text-gray-400">{uploading ? 'Uploading...' : polling ? 'Processing...' : 'Importing...'}</p>
               {extractedCount > 0 && (
                 <p className="text-sm text-blue-400 mt-2">Found {extractedCount} email addresses</p>
               )}
@@ -229,7 +227,7 @@ export default function UploadModal({ open, onClose, onImported }: UploadModalPr
             value={segmentName}
             onChange={(e) => setSegmentName(e.target.value)}
             placeholder="Leave empty to auto-name from filename"
-            disabled={uploading || polling}
+            disabled={uploading || polling || importing}
           />
         </div>
 

@@ -10,7 +10,7 @@ const nav = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/leads', label: 'Leads', icon: Users },
   { href: '/segments', label: 'Segments', icon: BarChart3 },
-  { href: '/campaigns', label: '🚀 Upload / Campaigns', icon: Megaphone, isSpecial: true },
+  { href: '/campaigns', label: 'Campaigns', icon: Megaphone },
   { href: '/tools', label: 'Tools', icon: Wrench },
 ];
 
@@ -48,9 +48,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             <Link key={item.href} href={item.href} title={item.label}>
               <div
                 className={`flex items-center gap-2 rounded-md px-3 py-2 text-sm transition-all duration-300 ${
-                  item.isSpecial
-                    ? 'bg-gradient-to-r from-pink-500 to-rose-500 text-white font-medium hover:scale-105 shadow-[0_0_15px_rgba(236,72,153,0.5)]'
-                    : pathname.startsWith(item.href) ? 'bg-white/15' : 'hover:bg-white/10'
+                  pathname.startsWith(item.href) ? 'bg-white/15' : 'hover:bg-white/10'
                 }`}
               >
                 <item.icon size={16} />
