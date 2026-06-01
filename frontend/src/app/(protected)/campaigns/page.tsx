@@ -8,8 +8,11 @@ import PageHeader from '@/components/ui/PageHeader';
 import Badge from '@/components/ui/Badge';
 import DataTable from '@/components/ui/DataTable';
 import Button from '@/components/ui/Button';
+import Input from '@/components/ui/Input';
+import EmptyState from '@/components/ui/EmptyState';
 import ComposeModal from '@/components/ComposeModal';
 import UploadModal from '@/components/UploadModal';
+import { Search, Plus } from 'lucide-react';
 
 export default function CampaignsPage() {
   const [activeTab, setActiveTab] = useState<'contacts' | 'campaigns'>('contacts');
@@ -23,6 +26,10 @@ export default function CampaignsPage() {
 
   const [showUpload, setShowUpload] = useState(false);
   const [showCompose, setShowCompose] = useState(false);
+
+  const [searchQuery, setSearchQuery] = useState('');
+  const [addEmailInput, setAddEmailInput] = useState('');
+  const [addingEmail, setAddingEmail] = useState(false);
 
   const loadCampaigns = useCallback(async () => {
     try {
@@ -66,6 +73,34 @@ export default function CampaignsPage() {
     setSelectedIds(newSet);
   };
 
+  const handleAddEmail = async () => {
+    const email = addEmailInput.trim().toLowerCase();
+    if (!email || !email.includes('@')) {
+      toast.error('Invalid email format');
+      return;
+    }
+    setAddingEmail(true);
+    try {
+      await apiClient.post('/api/campaigns/import', {
+        contacts: [{ email, fullName: '', whatsapp: '' }],
+        segmentName: segmentName || 'Manual',
+        segmentId: segmentId || undefined,
+      });
+      const res = await apiClient.get<{ data: Lead[] }>(`/api/leads?segmentId=${segmentId}&limit=1000`);
+      setContacts(res.data || []);
+      setAddEmailInput('');
+      toast.success('Email added');
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to add email');
+    } finally {
+      setAddingEmail(false);
+    }
+  };
+
+  const filteredContacts = contacts.filter(c =>
+    c.email.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
   const handleSendEmail = async (composeData: ComposeData) => {
     if (selectedIds.size === 0) {
       toast.error('No contacts selected');
@@ -87,12 +122,9 @@ export default function CampaignsPage() {
         attachments: composeData.attachments.length > 0 ? composeData.attachments : undefined,
       });
 
-      toast.success(`Sending emails to ${response.count} contacts...`);
+      toast.success(`Sending emails to ${response.count} contacts. Campaign created!`);
       await loadCampaigns();
       setSelectedIds(new Set());
-      setContacts([]);
-      setSegmentName('');
-      setSegmentId('');
     } catch (err: any) {
       toast.error(err.message || 'Failed to send emails');
     } finally {
@@ -109,40 +141,64 @@ export default function CampaignsPage() {
       />
 
       {/* Tabs */}
-      <div className="border-b border-gray-700 flex gap-6">
-        <button
-          onClick={() => setActiveTab('contacts')}
-          className={`pb-3 font-medium transition-colors ${
-            activeTab === 'contacts'
-              ? 'border-b-2 border-blue-500 text-white'
-              : 'text-gray-400 hover:text-gray-300'
-          }`}
-        >
-          Contacts {contacts.length > 0 && `(${contacts.length})`}
-        </button>
-        <button
-          onClick={() => setActiveTab('campaigns')}
-          className={`pb-3 font-medium transition-colors ${
-            activeTab === 'campaigns'
-              ? 'border-b-2 border-blue-500 text-white'
-              : 'text-gray-400 hover:text-gray-300'
-          }`}
-        >
-          Campaigns {campaigns.length > 0 && `(${campaigns.length})`}
-        </button>
+      <div className="flex gap-1 p-1 bg-[var(--background)] rounded-xl border border-[var(--border)] w-fit">
+        {(['contacts', 'campaigns'] as const).map(tab => (
+          <button
+            key={tab}
+            onClick={() => setActiveTab(tab)}
+            className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-all ${
+              activeTab === tab
+                ? 'bg-white border border-[var(--border)] text-[var(--foreground)] shadow-sm'
+                : 'text-[var(--muted)] hover:text-[var(--foreground)]'
+            }`}
+          >
+            {tab === 'contacts'
+              ? `Contacts${contacts.length > 0 ? ` (${contacts.length})` : ''}`
+              : `Campaigns${campaigns.length > 0 ? ` (${campaigns.length})` : ''}`}
+          </button>
+        ))}
       </div>
+
 
       {/* CONTACTS TAB */}
       {activeTab === 'contacts' && (
         <div className="space-y-4">
           {contacts.length === 0 ? (
-            <div className="crm-card p-12 text-center">
-              <p className="text-gray-400 mb-4">No contacts imported yet</p>
-              <Button onClick={() => setShowUpload(true)}>Upload Contacts</Button>
-            </div>
+            <EmptyState>
+              Upload a file or add emails manually to get started
+            </EmptyState>
           ) : (
             <>
-              {/* Toolbar */}
+              {/* Search + Add Email Toolbar */}
+              <div className="crm-card p-4 flex gap-4 items-center justify-between">
+                <div className="flex-1 flex gap-2">
+                  <div className="flex-1 relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-[var(--muted)] w-4 h-4" />
+                    <input
+                      type="text"
+                      placeholder="Search emails..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="crm-input w-full pl-9"
+                    />
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <input
+                    type="email"
+                    placeholder="Enter email..."
+                    value={addEmailInput}
+                    onChange={(e) => setAddEmailInput(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleAddEmail()}
+                    className="crm-input w-48"
+                  />
+                  <Button onClick={handleAddEmail} loading={addingEmail} className="flex gap-1">
+                    <Plus className="w-4 h-4" /> Add
+                  </Button>
+                </div>
+              </div>
+
+              {/* Action Bar */}
               <div className="crm-card p-4 flex items-center justify-between">
                 <div className="flex items-center gap-4">
                   <label className="flex items-center gap-2 cursor-pointer">
@@ -175,24 +231,24 @@ export default function CampaignsPage() {
               {/* Table */}
               <div className="crm-card overflow-hidden">
                 <table className="w-full text-left text-sm">
-                  <thead className="bg-zinc-50 dark:bg-zinc-900 border-b border-gray-700">
+                  <thead className="bg-[var(--background)] border-b border-[var(--border)]">
                     <tr>
                       <th className="px-4 py-3 w-12">
                         <input
                           type="checkbox"
-                          checked={selectedIds.size === contacts.length && contacts.length > 0}
+                          checked={selectedIds.size === filteredContacts.length && filteredContacts.length > 0}
                           onChange={(e) => handleSelectAll(e.target.checked)}
                           className="w-4 h-4"
                         />
                       </th>
-                      <th className="px-4 py-3">Email</th>
-                      <th className="px-4 py-3">Name</th>
-                      <th className="px-4 py-3">Phone</th>
+                      <th className="px-4 py-3 font-semibold text-[var(--foreground)]">Email</th>
+                      <th className="px-4 py-3 font-semibold text-[var(--foreground)]">Name</th>
+                      <th className="px-4 py-3 font-semibold text-[var(--foreground)]">Status</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {contacts.map((contact) => (
-                      <tr key={contact.id} className="border-b border-gray-700 hover:bg-gray-800/30">
+                    {filteredContacts.map((contact) => (
+                      <tr key={contact.id} className="border-b border-[var(--border)] hover:bg-gray-50 transition-colors">
                         <td className="px-4 py-3">
                           <input
                             type="checkbox"
@@ -201,9 +257,9 @@ export default function CampaignsPage() {
                             className="w-4 h-4"
                           />
                         </td>
-                        <td className="px-4 py-3 text-blue-400">{contact.email}</td>
-                        <td className="px-4 py-3">{contact.fullName || '—'}</td>
-                        <td className="px-4 py-3 text-gray-400">{contact.whatsapp || '—'}</td>
+                        <td className="px-4 py-3 text-blue-600 font-medium">{contact.email}</td>
+                        <td className="px-4 py-3 text-[var(--foreground)]">{contact.fullName || '—'}</td>
+                        <td className="px-4 py-3"><Badge value={contact.status} /></td>
                       </tr>
                     ))}
                   </tbody>
