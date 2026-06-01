@@ -162,12 +162,20 @@ const sendCampaign = async (req, res) => {
 exports.sendCampaign = sendCampaign;
 const sendToLeads = async (req, res) => {
     try {
-        const { subject, content, leadIds, attachments } = req.body;
+        const { subject, content, leadIds, attachments, segmentId } = req.body;
         if (!subject || !content) {
             return res.status(400).json({ error: 'Subject and content are required' });
         }
         if (!leadIds || !Array.isArray(leadIds) || leadIds.length === 0) {
             return res.status(400).json({ error: 'At least one lead ID is required' });
+        }
+        if (!segmentId) {
+            return res.status(400).json({ error: 'Segment ID is required' });
+        }
+        // Verify segment exists
+        const segment = await prisma_1.default.segment.findUnique({ where: { id: segmentId } });
+        if (!segment) {
+            return res.status(404).json({ error: 'Segment not found' });
         }
         // Create campaign
         const campaign = await prisma_1.default.campaign.create({
@@ -177,7 +185,7 @@ const sendToLeads = async (req, res) => {
                 subject,
                 content,
                 attachments: attachments || null,
-                segmentId: 'direct-send',
+                segmentId,
                 status: 'SCHEDULED'
             }
         });

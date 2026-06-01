@@ -3,7 +3,7 @@ import type { NextRequest } from 'next/server';
 
 const protectedRoutes = ['/dashboard', '/leads', '/segments', '/campaigns', '/tools'];
 
-export function proxy(request: NextRequest) {
+export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const needsAuth = protectedRoutes.some((route) => pathname.startsWith(route));
   const hasSession = request.cookies.get('hog_session')?.value === '1';
