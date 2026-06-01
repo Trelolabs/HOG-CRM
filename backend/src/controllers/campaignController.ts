@@ -179,7 +179,7 @@ export const sendToLeads = async (req: Request, res: Response) => {
             return res.status(404).json({ error: 'No leads found with provided IDs' });
         }
 
-        // Add email jobs to queue
+        // Add email jobs to queue with retry logic
         const { emailQueue } = await import('../queues');
         const jobs = leads.map(lead => ({
             name: 'sendEmail',
@@ -187,11 +187,17 @@ export const sendToLeads = async (req: Request, res: Response) => {
                 to: lead.email,
                 subject,
                 html: content,
-                attachments: attachments || undefined
+                attachments: attachments || undefined,
+                campaignId: campaign.id
+            },
+            opts: {
+                attempts: 3,
+                backoff: { type: 'exponential' as const, delay: 3000 }
             }
         }));
 
         await emailQueue.addBulk(jobs);
+        console.log(`[SendToLeads] Enqueued ${jobs.length} jobs to emailQueue`);
 
         // Update campaign
         await prisma.campaign.update({
@@ -222,19 +228,20 @@ export const uploadFile = async (req: Request, res: Response) => {
             console.warn(`[API] Upload request failed: No file uploaded`);
             return res.status(400).json({ error: 'No file uploaded' });
         }
-        
-        console.log(`[API] File uploaded successfully to temp storage: ${req.file.path} (${req.file.mimetype})`);
-        
+
+        const filePath = req.file.path;
+        console.log(`[API] File uploaded to: ${filePath} (${req.file.mimetype})`);
+
         const job = await uploadQueue.add('processFile', {
-            filePath: req.file.path,
+            filePath,
             originalname: req.file.originalname,
             mimetype: req.file.mimetype
         });
 
-        console.log(`[API] Added processing job ${job.id} to uploadQueue for file ${req.file.originalname}`);
+        console.log(`[API] Added job ${job.id} for file ${req.file.originalname}`);
         res.json({ jobId: job.id, message: 'File uploaded and processing started' });
     } catch (error: any) {
-        console.error(`[API] Error during upload processing:`, error);
+        console.error(`[API] Error during upload:`, error);
         res.status(500).json({ error: 'Failed to process upload', details: error.message });
     }
 };
@@ -267,18 +274,30 @@ export const getUploadStatus = async (req: Request, res: Response) => {
 
 export const importContacts = async (req: Request, res: Response) => {
     try {
+        console.log('[Import] Starting import');
         const { contacts, segmentName } = req.body;
 
         if (!Array.isArray(contacts)) {
             return res.status(400).json({ error: 'Contacts must be an array' });
         }
 
+        console.log(`[Import] Received ${contacts.length} contacts`);
+
         // Create or find segment
         let segmentId = req.body.segmentId;
         if (!segmentId && segmentName) {
-            const segment = await prisma.segment.create({
-                data: { name: segmentName }
+            console.log(`[Import] Finding/creating segment: ${segmentName}`);
+            let segment = await prisma.segment.findUnique({
+                where: { name: segmentName }
             });
+            if (!segment) {
+                segment = await prisma.segment.create({
+                    data: { name: segmentName }
+                });
+                console.log(`[Import] Created segment ${segmentId}`);
+            } else {
+                console.log(`[Import] Found existing segment ${segment.id}`);
+            }
             segmentId = segment.id;
         }
 
@@ -290,6 +309,7 @@ export const importContacts = async (req: Request, res: Response) => {
             const email = c.email || c.Email || c['E-mail'] || '';
             return email && email.toString().toLowerCase().includes('@');
         });
+        console.log(`[Import] Valid contacts: ${validContacts.length}/${contacts.length}`);
 
         // If no valid contacts, just create segment and return success
         if (validContacts.length === 0) {
@@ -302,6 +322,7 @@ export const importContacts = async (req: Request, res: Response) => {
         }
 
         // Check for duplicates
+        console.log(`[Import] Checking for duplicates...`);
         const emailsToImport = validContacts.map(c => {
             const email = c.email || c.Email || c['E-mail'] || '';
             return email.toString().toLowerCase().trim();
@@ -309,9 +330,10 @@ export const importContacts = async (req: Request, res: Response) => {
 
         const existingEmails = await prisma.lead.findMany({
             where: { email: { in: emailsToImport } },
-            select: { email: true, id: true }
+            select: { email: true }
         });
         const existingEmailSet = new Set(existingEmails.map(e => e.email?.toLowerCase()));
+        console.log(`[Import] Found ${existingEmailSet.size} existing emails`);
 
         // Separate duplicates from new contacts
         const newContacts = [];
@@ -323,50 +345,52 @@ export const importContacts = async (req: Request, res: Response) => {
                 newContacts.push(contact);
             }
         }
+        console.log(`[Import] Will import ${newContacts.length} new contacts, ${duplicates.length} duplicates`);
 
-        // Import new contacts in batches
+        // Import new contacts via bulk createMany (single SQL statement, not 600 round-trips)
+        let importedCount = 0;
         if (newContacts.length > 0) {
             try {
-                const batch = newContacts.map(contact => {
+                const rows = newContacts.map(contact => {
                     const email = (contact.email || contact.Email || contact['E-mail'] || '').toString().toLowerCase().trim();
                     const fullName = contact.fullName || contact.name || contact.Name ||
-                        (contact.firstName ? `${contact.firstName} ${contact.lastName || ''}`.trim() : '') ||
-                        '';
+                        (contact.firstName ? `${contact.firstName} ${contact.lastName || ''}`.trim() : '') || '';
                     const whatsapp = contact.whatsapp || contact.phone || contact.Phone || '';
-
-                    const data: any = {
-                        email,
-                        fullName,
-                        whatsapp,
-                    };
+                    const data: any = { email, fullName, whatsapp };
                     if (segmentId) data.segmentId = segmentId;
-
-                    return prisma.lead.upsert({
-                        where: { email },
-                        update: {
-                            fullName: fullName || undefined,
-                            whatsapp: whatsapp || undefined,
-                        },
-                        create: data,
-                    });
+                    return data;
                 });
 
-                const createdLeads = await prisma.$transaction(batch);
-                inserted.push(...createdLeads);
+                console.log(`[Import] createMany for ${rows.length} contacts...`);
+                const t0 = Date.now();
+                const result = await prisma.lead.createMany({ data: rows, skipDuplicates: true });
+                const elapsed = Date.now() - t0;
+                console.log(`[Import] createMany done in ${elapsed}ms. Imported: ${result.count}`);
+                importedCount = result.count;
             } catch (batchError: any) {
-                console.error('Batch import error:', batchError);
+                console.error('[Import] createMany error:', batchError);
                 throw batchError;
             }
         }
 
+        // Update existing contacts to belong to the segment (re-import case)
+        if (existingEmailSet.size > 0 && segmentId) {
+            console.log(`[Import] Updating ${existingEmailSet.size} existing contacts with segment...`);
+            await prisma.lead.updateMany({
+                where: { email: { in: [...existingEmailSet] } },
+                data: { segmentId }
+            });
+        }
+
+        console.log(`[Import] Import complete. Imported: ${importedCount}, Duplicates: ${duplicates.length}`);
         res.status(201).json({
-            message: `Imported ${inserted.length} contacts. ${duplicates.length} already exist.`,
+            message: `Imported ${importedCount} contacts. ${duplicates.length} already exist.`,
             segmentId,
-            imported: inserted.length,
+            imported: importedCount,
             duplicates: duplicates.length,
         });
     } catch (error: any) {
-        console.error('Import error:', error);
+        console.error('[Import] Error:', error);
         res.status(500).json({ error: 'Failed to import contacts', details: error.message });
     }
 };
