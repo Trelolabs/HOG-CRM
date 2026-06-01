@@ -27,6 +27,7 @@ export default function CampaignsPage() {
 
   const [showUpload, setShowUpload] = useState(false);
   const [showCompose, setShowCompose] = useState(false);
+  const [showAddEmail, setShowAddEmail] = useState(false);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [addEmailInput, setAddEmailInput] = useState('');
@@ -116,6 +117,7 @@ export default function CampaignsPage() {
       const res = await apiClient.get<{ data: Lead[] }>(`/api/leads?segmentId=${segmentId}&limit=1000`);
       setContacts(res.data || []);
       setAddEmailInput('');
+      setShowAddEmail(false);
       loadSegments();
       toast.success('Email added');
     } catch (err: any) {
@@ -264,7 +266,7 @@ export default function CampaignsPage() {
                   </div>
                 </div>
 
-                {/* Search + Add Email */}
+                {/* Search */}
                 <div className="crm-card p-3 flex gap-3 items-center">
                   <div className="flex-1 relative">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)] w-4 h-4" />
@@ -276,16 +278,8 @@ export default function CampaignsPage() {
                       className="crm-input w-full pl-9 py-2"
                     />
                   </div>
-                  <input
-                    type="email"
-                    placeholder="Add email..."
-                    value={addEmailInput}
-                    onChange={(e) => setAddEmailInput(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleAddEmail()}
-                    className="crm-input w-44 py-2"
-                  />
-                  <Button onClick={handleAddEmail} loading={addingEmail}>
-                    <Plus className="w-4 h-4" /> Add
+                  <Button onClick={() => setShowAddEmail(true)}>
+                    <Plus className="w-4 h-4" /> Add Email
                   </Button>
                 </div>
 
@@ -385,6 +379,38 @@ export default function CampaignsPage() {
               ])}
             />
           )}
+        </div>
+      )}
+
+      {/* Add Email Modal */}
+      {showAddEmail && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="crm-card p-6 w-96 space-y-4">
+            <h2 className="text-lg font-semibold">Add Email</h2>
+            <input
+              type="email"
+              placeholder="Enter email address..."
+              value={addEmailInput}
+              onChange={(e) => setAddEmailInput(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleAddEmail()}
+              autoFocus
+              className="crm-input w-full"
+            />
+            <div className="flex gap-2 justify-end">
+              <Button
+                variant="ghost"
+                onClick={() => { setShowAddEmail(false); setAddEmailInput(''); }}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleAddEmail}
+                loading={addingEmail}
+              >
+                Add
+              </Button>
+            </div>
+          </div>
         </div>
       )}
 
