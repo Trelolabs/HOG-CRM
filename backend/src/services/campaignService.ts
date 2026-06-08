@@ -9,7 +9,10 @@ type ProviderMode = 'mock' | 'live';
 const providerMode = (process.env.CAMPAIGN_PROVIDER_MODE || 'mock').toLowerCase() as ProviderMode;
 
 const getMissingEnvVarsForLiveMode = () => {
-    const required = ['RESEND_API_KEY', 'EMAIL_FROM'];
+    const required = [
+        'RESEND_API_KEY', 'EMAIL_FROM',
+        'TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN', 'TWILIO_SENDER_NUMBER'
+    ];
     return required.filter((key) => !process.env[key]);
 };
 
