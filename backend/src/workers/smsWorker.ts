@@ -68,12 +68,20 @@ export const smsWorker = new Worker('smsQueue', async job => {
     console.log(`[SMSWorker] Mock send to ${to}: ${messageBody}`);
   }
 
-  // Increment campaign sentRecipients
+  // Increment campaign sentRecipients and check if all jobs are done
   if (campaignId) {
-    await prisma.campaign.update({
+    const updatedCampaign = await prisma.campaign.update({
       where: { id: campaignId },
       data: { sentRecipients: { increment: 1 } }
     });
+
+    // Mark campaign as SENT if all recipients have been processed
+    if (updatedCampaign.sentRecipients >= updatedCampaign.attemptedRecipients && updatedCampaign.status !== 'SENT') {
+      await prisma.campaign.update({
+        where: { id: campaignId },
+        data: { status: 'SENT', sentAt: new Date() }
+      });
+    }
   }
 
   return { to };

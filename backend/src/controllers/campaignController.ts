@@ -247,12 +247,10 @@ export const sendToLeads = async (req: Request, res: Response) => {
         });
         console.log(`[SendToLeads] Marked ${leads.length} leads as CONTACTED`);
 
-        // Update campaign
+        // Update campaign with attempted count (status stays SCHEDULED while jobs process)
         await prisma.campaign.update({
             where: { id: campaign.id },
             data: {
-                status: 'SENT',
-                sentAt: new Date(),
                 attemptedRecipients: leads.length
             }
         });
