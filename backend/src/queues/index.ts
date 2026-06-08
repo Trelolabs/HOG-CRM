@@ -3,3 +3,5 @@ import { redisConnection } from '../workers/redisClient';
 
 export const uploadQueue = new Queue('uploadQueue', { connection: redisConnection as any });
 export const emailQueue = new Queue('emailQueue', { connection: redisConnection as any });
+export const smsQueue = new Queue('smsQueue', { connection: redisConnection as any });
+

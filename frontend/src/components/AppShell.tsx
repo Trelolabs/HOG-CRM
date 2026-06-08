@@ -3,15 +3,29 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { BarChart3, ChevronLeft, ChevronRight, LayoutDashboard, LogOut, Megaphone, Users, Wrench } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Button from './ui/Button';
 
-const nav = [
-  { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/leads', label: 'Leads', icon: Users },
-  { href: '/segments', label: 'Segments', icon: BarChart3 },
-  { href: '/campaigns', label: 'Campaigns', icon: Megaphone },
-  { href: '/tools', label: 'Tools', icon: Wrench },
+type NavItem = {
+  label: string;
+  icon: React.ComponentType<{ size: number }>;
+  href?: string;
+  children?: Array<{ label: string; href: string }>;
+};
+
+const nav: NavItem[] = [
+  { label: 'Dashboard', icon: LayoutDashboard, href: '/dashboard' },
+  { label: 'Leads', icon: Users, href: '/leads' },
+  { label: 'Segments', icon: BarChart3, href: '/segments' },
+  {
+    label: 'Campaigns',
+    icon: Megaphone,
+    children: [
+      { label: 'Email Campaign', href: '/campaigns/email' },
+      { label: 'SMS Campaign', href: '/campaigns/sms' },
+    ],
+  },
+  { label: 'Tools', icon: Wrench, href: '/tools' },
 ];
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
@@ -19,6 +33,13 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const [collapsed, setCollapsed] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [expandedGroup, setExpandedGroup] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (pathname.startsWith('/campaigns')) {
+      setExpandedGroup('Campaigns');
+    }
+  }, [pathname]);
 
   const logout = async () => {
     try {
@@ -43,18 +64,60 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           </button>
         </div>
 
-        <nav className="space-y-4">
+        <nav className="space-y-1">
           {nav.map((item) => (
-            <Link key={item.href} href={item.href} title={item.label}>
-              <div
-                className={`flex items-center gap-2 rounded-md px-3 py-2 text-sm transition-all duration-300 ${
-                  pathname.startsWith(item.href) ? 'bg-white/15' : 'hover:bg-white/10'
-                }`}
-              >
-                <item.icon size={16} />
-                {!collapsed ? <span>{item.label}</span> : null}
-              </div>
-            </Link>
+            <div key={item.label}>
+              {item.children ? (
+                <div>
+                  <button
+                    onClick={() => setExpandedGroup(expandedGroup === item.label ? null : item.label)}
+                    title={item.label}
+                    className={`w-full flex items-center gap-2 rounded-md px-3 py-2 text-sm transition-all duration-300 ${
+                      expandedGroup === item.label ? 'bg-white/15' : 'hover:bg-white/10'
+                    }`}
+                  >
+                    <item.icon size={16} />
+                    {!collapsed ? (
+                      <>
+                        <span>{item.label}</span>
+                        <ChevronRight
+                          size={14}
+                          className={`ml-auto transition-transform ${
+                            expandedGroup === item.label ? 'rotate-90' : ''
+                          }`}
+                        />
+                      </>
+                    ) : null}
+                  </button>
+                  {expandedGroup === item.label && !collapsed && (
+                    <div className="ml-2 mt-1 space-y-1 border-l border-white/20">
+                      {item.children.map((child) => (
+                        <Link key={child.href} href={child.href} title={child.label}>
+                          <div
+                            className={`flex items-center gap-2 rounded-md px-3 py-2 pl-4 text-sm transition-all duration-300 ${
+                              pathname === child.href ? 'bg-white/15' : 'hover:bg-white/10'
+                            }`}
+                          >
+                            <span>{child.label}</span>
+                          </div>
+                        </Link>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <Link href={item.href!} title={item.label}>
+                  <div
+                    className={`flex items-center gap-2 rounded-md px-3 py-2 text-sm transition-all duration-300 ${
+                      pathname.startsWith(item.href!) ? 'bg-white/15' : 'hover:bg-white/10'
+                    }`}
+                  >
+                    <item.icon size={16} />
+                    {!collapsed ? <span>{item.label}</span> : null}
+                  </div>
+                </Link>
+              )}
+            </div>
           ))}
         </nav>
 

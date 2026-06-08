@@ -48,14 +48,21 @@ type CampaignSendResult = {
     failureReason: string | null;
 };
 
-import { emailQueue } from '../queues';
+import { emailQueue, smsQueue } from '../queues';
 
-const sendEmailCampaign = async (segmentId: string, subject: string, content: string): Promise<CampaignSendResult> => {
+const sendEmailCampaign = async (segmentId: string, subject: string, content: string, campaignId: string): Promise<CampaignSendResult> => {
     const recipients = await prisma.lead.findMany({
-        where: { segmentId, email: {
-            not: ''
-        } },
-        select: { email: true }
+        where: { 
+            segmentId, 
+            email: { not: '' } 
+        },
+        select: { 
+            id: true,
+            fullName: true,
+            email: true,
+            whatsapp: true,
+            businessName: true
+        }
     });
 
     if (recipients.length === 0) {
@@ -74,14 +81,16 @@ const sendEmailCampaign = async (segmentId: string, subject: string, content: st
         data: {
             to: String(recipient.email),
             subject,
-            html: content
+            html: content,
+            recipient,
+            campaignId
         }
     }));
     
     await emailQueue.addBulk(jobs);
 
     return {
-        status: 'SCHEDULED', // Using standard prisma status for scheduled
+        status: 'SCHEDULED',
         attemptedRecipients: recipients.length,
         sentRecipients: 0,
         providerMessageId: null,
@@ -89,13 +98,24 @@ const sendEmailCampaign = async (segmentId: string, subject: string, content: st
     };
 };
 
-const sendSmsCampaign = async (segmentId: string, content: string, smsProvider: SmsProvider): Promise<CampaignSendResult> => {
+const sendSmsCampaign = async (segmentId: string, content: string, campaignId: string): Promise<CampaignSendResult> => {
     const recipients = await prisma.lead.findMany({
-        where: { segmentId, whatsapp: { not: null } },
-        select: { whatsapp: true }
+        where: {
+            segmentId,
+            whatsapp: { not: '' }
+        },
+        select: {
+            id: true,
+            fullName: true,
+            email: true,
+            whatsapp: true,
+            businessName: true
+        }
     });
 
-    if (recipients.length === 0) {
+    const validRecipients = recipients.filter(r => r.whatsapp && r.whatsapp.trim() !== '');
+
+    if (validRecipients.length === 0) {
         return {
             status: 'FAILED',
             attemptedRecipients: 0,
@@ -105,24 +125,25 @@ const sendSmsCampaign = async (segmentId: string, content: string, smsProvider: 
         };
     }
 
-    const settled = await Promise.allSettled(
-        recipients.map((recipient) =>
-            smsProvider.sendSms({
-                to: String(recipient.whatsapp),
-                body: content
-            })
-        )
-    );
+    // Add jobs to queue
+    const jobs = validRecipients.map(recipient => ({
+        name: 'sendSms',
+        data: {
+            to: String(recipient.whatsapp),
+            body: content,
+            recipient,
+            campaignId
+        }
+    }));
 
-    const successResults = settled.filter((entry): entry is PromiseFulfilledResult<{ providerMessageId: string }> => entry.status === 'fulfilled');
-    const failedResults = settled.filter((entry) => entry.status === 'rejected');
+    await smsQueue.addBulk(jobs);
 
     return {
-        status: successResults.length > 0 ? 'SENT' : 'FAILED',
-        attemptedRecipients: recipients.length,
-        sentRecipients: successResults.length,
-        providerMessageId: successResults[0]?.value.providerMessageId || null,
-        failureReason: failedResults.length ? `${failedResults.length} SMS sends failed` : null
+        status: 'SCHEDULED',
+        attemptedRecipients: validRecipients.length,
+        sentRecipients: 0,
+        providerMessageId: null,
+        failureReason: null
     };
 };
 
@@ -138,18 +159,17 @@ export const sendCampaignWithProvider = async (campaignId: string) => {
         throw notFoundError;
     }
     
-    if (campaign.status === 'SENT') {
+    if (campaign.status === 'SENT' || campaign.status === 'SCHEDULED') {
         return {
             mode: providerMode,
             campaign
         };
     }
 
-    const { emailProvider } = createProviders();
     const result =
         campaign.type === CampaignType.EMAIL
-            ? await sendEmailCampaign(campaign.segmentId, campaign.subject || campaign.name, campaign.content) : null
-            // : await sendSmsCampaign(campaign.segmentId, campaign.content, smsProvider);
+            ? await sendEmailCampaign(campaign.segmentId, campaign.subject || campaign.name, campaign.content, campaign.id)
+            : await sendSmsCampaign(campaign.segmentId, campaign.content, campaign.id);
 
     const updatedCampaign = await prisma.campaign.update({
         where: { id: campaign.id },

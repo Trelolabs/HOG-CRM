@@ -77,13 +77,18 @@ const getCampaigns = async (req, res) => {
     try {
         const status = String(req.query.status || '').trim().toUpperCase();
         const segmentId = String(req.query.segmentId || '').trim();
+        const type = String(req.query.type || '').trim().toUpperCase();
         if (status && !CAMPAIGN_STATUSES.includes(status)) {
             return res.status(400).json({ error: `Invalid status. Allowed: ${CAMPAIGN_STATUSES.join(', ')}` });
+        }
+        if (type && !CAMPAIGN_TYPES.includes(type)) {
+            return res.status(400).json({ error: `Invalid type. Allowed: ${CAMPAIGN_TYPES.join(', ')}` });
         }
         const campaigns = await prisma_1.default.campaign.findMany({
             where: {
                 ...(status ? { status } : {}),
-                ...(segmentId ? { segmentId } : {})
+                ...(segmentId ? { segmentId } : {}),
+                ...(type ? { type } : {})
             },
             include: { segment: true },
             orderBy: { createdAt: 'desc' }
@@ -162,9 +167,13 @@ const sendCampaign = async (req, res) => {
 exports.sendCampaign = sendCampaign;
 const sendToLeads = async (req, res) => {
     try {
-        const { subject, content, leadIds, attachments, segmentId } = req.body;
-        if (!subject || !content) {
-            return res.status(400).json({ error: 'Subject and content are required' });
+        const { type = 'EMAIL', subject, content, leadIds, attachments, segmentId } = req.body;
+        const normalizedType = String(type).toUpperCase();
+        if (normalizedType === 'EMAIL' && !subject) {
+            return res.status(400).json({ error: 'Subject is required for EMAIL campaigns' });
+        }
+        if (!content) {
+            return res.status(400).json({ error: 'Content is required' });
         }
         if (!leadIds || !Array.isArray(leadIds) || leadIds.length === 0) {
             return res.status(400).json({ error: 'At least one lead ID is required' });
@@ -180,47 +189,77 @@ const sendToLeads = async (req, res) => {
         // Create campaign
         const campaign = await prisma_1.default.campaign.create({
             data: {
-                type: 'EMAIL',
+                type: normalizedType,
                 name: `Campaign - ${new Date().toLocaleString()}`,
-                subject,
+                subject: normalizedType === 'EMAIL' ? subject : null,
                 content,
-                attachments: attachments || null,
+                attachments: normalizedType === 'EMAIL' ? (attachments || null) : null,
                 segmentId,
                 status: 'SCHEDULED'
             }
         });
-        // Get lead emails
+        // Get lead details
         const leads = await prisma_1.default.lead.findMany({
-            where: { id: { in: leadIds } },
-            select: { email: true }
+            where: {
+                id: { in: leadIds },
+                ...(normalizedType === 'EMAIL' ? { email: { not: '' } } : { whatsapp: { not: '' } })
+            },
+            select: {
+                id: true,
+                fullName: true,
+                email: true,
+                whatsapp: true,
+                businessName: true
+            }
         });
         if (leads.length === 0) {
-            return res.status(404).json({ error: 'No leads found with provided IDs' });
+            return res.status(404).json({ error: normalizedType === 'EMAIL' ? 'No leads with valid email addresses found' : 'No leads with valid WhatsApp/phone numbers found' });
         }
-        // Add email jobs to queue with retry logic
-        const { emailQueue } = await Promise.resolve().then(() => __importStar(require('../queues')));
-        const jobs = leads.map(lead => ({
-            name: 'sendEmail',
-            data: {
-                to: lead.email,
-                subject,
-                html: content,
-                attachments: attachments || undefined,
-                campaignId: campaign.id
-            },
-            opts: {
-                attempts: 3,
-                backoff: { type: 'exponential', delay: 3000 }
-            }
-        }));
-        await emailQueue.addBulk(jobs);
-        console.log(`[SendToLeads] Enqueued ${jobs.length} jobs to emailQueue`);
-        // Mark leads as CONTACTED (email attempted)
+        // Add jobs to correct queue with retry logic
+        if (normalizedType === 'EMAIL') {
+            const { emailQueue } = await Promise.resolve().then(() => __importStar(require('../queues')));
+            const jobs = leads.map(lead => ({
+                name: 'sendEmail',
+                data: {
+                    to: lead.email,
+                    subject,
+                    html: content,
+                    attachments: attachments || undefined,
+                    recipient: lead,
+                    campaignId: campaign.id
+                },
+                opts: {
+                    attempts: 3,
+                    backoff: { type: 'exponential', delay: 3000 }
+                }
+            }));
+            await emailQueue.addBulk(jobs);
+            console.log(`[SendToLeads] Enqueued ${jobs.length} jobs to emailQueue`);
+        }
+        else {
+            const { smsQueue } = await Promise.resolve().then(() => __importStar(require('../queues')));
+            const jobs = leads.map(lead => ({
+                name: 'sendSms',
+                data: {
+                    to: lead.whatsapp,
+                    body: content,
+                    recipient: lead,
+                    campaignId: campaign.id
+                },
+                opts: {
+                    attempts: 3,
+                    backoff: { type: 'exponential', delay: 3000 }
+                }
+            }));
+            await smsQueue.addBulk(jobs);
+            console.log(`[SendToLeads] Enqueued ${jobs.length} jobs to smsQueue`);
+        }
+        // Mark leads as CONTACTED
         await prisma_1.default.lead.updateMany({
-            where: { id: { in: leadIds } },
+            where: { id: { in: leads.map(l => l.id) } },
             data: { status: 'CONTACTED' }
         });
-        console.log(`[SendToLeads] Marked ${leadIds.length} leads as CONTACTED`);
+        console.log(`[SendToLeads] Marked ${leads.length} leads as CONTACTED`);
         // Update campaign
         await prisma_1.default.campaign.update({
             where: { id: campaign.id },
@@ -230,14 +269,14 @@ const sendToLeads = async (req, res) => {
             }
         });
         res.status(201).json({
-            message: `Sending emails to ${leads.length} contacts`,
+            message: normalizedType === 'EMAIL' ? `Sending emails to ${leads.length} contacts` : `Sending SMS to ${leads.length} contacts`,
             campaignId: campaign.id,
             count: leads.length
         });
     }
     catch (error) {
         console.error('Send to leads error:', error);
-        res.status(500).json({ error: 'Failed to send emails', details: error.message });
+        res.status(500).json({ error: 'Failed to send campaign', details: error.message });
     }
 };
 exports.sendToLeads = sendToLeads;
@@ -249,12 +288,14 @@ const uploadFile = async (req, res) => {
             console.warn(`[API] Upload request failed: No file uploaded`);
             return res.status(400).json({ error: 'No file uploaded' });
         }
+        const { campaignType = 'EMAIL' } = req.body;
         const filePath = req.file.path;
-        console.log(`[API] File uploaded to: ${filePath} (${req.file.mimetype})`);
+        console.log(`[API] File uploaded to: ${filePath} (${req.file.mimetype}) for campaign type: ${campaignType}`);
         const job = await queues_1.uploadQueue.add('processFile', {
             filePath,
             originalname: req.file.originalname,
-            mimetype: req.file.mimetype
+            mimetype: req.file.mimetype,
+            campaignType: campaignType.toUpperCase()
         });
         console.log(`[API] Added job ${job.id} for file ${req.file.originalname}`);
         res.json({ jobId: job.id, message: 'File uploaded and processing started' });
@@ -290,13 +331,21 @@ const getUploadStatus = async (req, res) => {
 };
 exports.getUploadStatus = getUploadStatus;
 const importContacts = async (req, res) => {
+    const t0 = Date.now();
     try {
         console.log('[Import] Starting import');
-        const { contacts, segmentName } = req.body;
+        const { contacts, segmentName, campaignType } = req.body;
         if (!Array.isArray(contacts)) {
             return res.status(400).json({ error: 'Contacts must be an array' });
         }
-        console.log(`[Import] Received ${contacts.length} contacts`);
+        if (!campaignType) {
+            return res.status(400).json({ error: 'campaignType is required (EMAIL or SMS)' });
+        }
+        const normalizedCampaignType = String(campaignType).toUpperCase();
+        if (!['EMAIL', 'SMS'].includes(normalizedCampaignType)) {
+            return res.status(400).json({ error: 'Invalid campaignType. Allowed: EMAIL, SMS' });
+        }
+        console.log(`[Import] Received ${contacts.length} contacts for ${normalizedCampaignType}`);
         // Create or find segment
         let segmentId = req.body.segmentId;
         if (!segmentId && segmentName) {
@@ -306,22 +355,24 @@ const importContacts = async (req, res) => {
             });
             if (!segment) {
                 segment = await prisma_1.default.segment.create({
-                    data: { name: segmentName }
+                    data: { name: segmentName, campaignType: normalizedCampaignType }
                 });
-                console.log(`[Import] Created segment ${segmentId}`);
+                console.log(`[Import] Created segment ${segment.id} for ${normalizedCampaignType}`);
+            }
+            else if (segment.campaignType !== normalizedCampaignType) {
+                const elapsed = Date.now() - t0;
+                console.error(`[Import] Error after ${elapsed}ms: Segment ${segmentName} exists for a different campaign type`);
+                return res.status(409).json({ error: `A segment named "${segmentName}" already exists for ${segment.campaignType} campaigns. Please use a different name.` });
             }
             else {
-                console.log(`[Import] Found existing segment ${segment.id}`);
+                console.log(`[Import] Found existing segment ${segment.id} for ${normalizedCampaignType}`);
             }
             segmentId = segment.id;
         }
         const inserted = [];
         const duplicates = [];
-        // Filter out contacts with no email
-        const validContacts = contacts.filter(c => {
-            const email = c.email || c.Email || c['E-mail'] || '';
-            return email && email.toString().toLowerCase().includes('@');
-        });
+        // Contacts are already filtered by type (email/sms) during upload extraction
+        const validContacts = contacts;
         console.log(`[Import] Valid contacts: ${validContacts.length}/${contacts.length}`);
         // If no valid contacts, just create segment and return success
         if (validContacts.length === 0) {
@@ -332,24 +383,51 @@ const importContacts = async (req, res) => {
                 duplicates: 0,
             });
         }
-        // Check for duplicates
+        // Check for duplicates — type-aware dedup logic
         console.log(`[Import] Checking for duplicates...`);
-        const emailsToImport = validContacts.map(c => {
-            const email = c.email || c.Email || c['E-mail'] || '';
-            return email.toString().toLowerCase().trim();
-        });
-        const existingEmails = await prisma_1.default.lead.findMany({
-            where: { email: { in: emailsToImport } },
-            select: { email: true }
-        });
-        const existingEmailSet = new Set(existingEmails.map(e => e.email?.toLowerCase()));
-        console.log(`[Import] Found ${existingEmailSet.size} existing emails`);
+        const t1 = Date.now();
+        let existingSet = new Set();
+        let dedupeKey;
+        if (normalizedCampaignType === 'EMAIL') {
+            // EMAIL: dedup by email address
+            const emailsToImport = validContacts.map(c => {
+                const email = c.email || c.Email || c['E-mail'] || '';
+                return email.toString().toLowerCase().trim();
+            });
+            const t2 = Date.now();
+            const existingEmails = await prisma_1.default.lead.findMany({
+                where: { email: { in: emailsToImport } },
+                select: { email: true }
+            });
+            const t3 = Date.now();
+            existingSet = new Set(existingEmails.map(e => e.email?.toLowerCase()));
+            dedupeKey = 'email';
+            console.log(`[Import] Mapped emails: ${t2 - t1}ms, DB query: ${t3 - t2}ms, Found ${existingSet.size} existing emails`);
+        }
+        else {
+            // SMS: dedup by phone/whatsapp
+            const phonesToImport = validContacts.map(c => {
+                const phone = c.whatsapp || c.phone || c.Phone || '';
+                return phone.toString().trim();
+            });
+            const t2 = Date.now();
+            const existingPhones = await prisma_1.default.lead.findMany({
+                where: { whatsapp: { in: phonesToImport } },
+                select: { whatsapp: true }
+            });
+            const t3 = Date.now();
+            existingSet = new Set(existingPhones.map(p => p.whatsapp?.trim()));
+            dedupeKey = 'whatsapp';
+            console.log(`[Import] Mapped phones: ${t2 - t1}ms, DB query: ${t3 - t2}ms, Found ${existingSet.size} existing phone numbers`);
+        }
         // Separate duplicates from new contacts
         const newContacts = [];
         for (const contact of validContacts) {
-            const email = (contact.email || contact.Email || contact['E-mail'] || '').toString().toLowerCase().trim();
-            if (existingEmailSet.has(email)) {
-                duplicates.push({ email });
+            const key = dedupeKey === 'email'
+                ? (contact.email || contact.Email || contact['E-mail'] || '').toString().toLowerCase().trim()
+                : (contact.whatsapp || contact.phone || contact.Phone || '').toString().trim();
+            if (existingSet.has(key)) {
+                duplicates.push({ [dedupeKey]: key });
             }
             else {
                 newContacts.push(contact);
@@ -361,10 +439,20 @@ const importContacts = async (req, res) => {
         if (newContacts.length > 0) {
             try {
                 const rows = newContacts.map(contact => {
-                    const email = (contact.email || contact.Email || contact['E-mail'] || '').toString().toLowerCase().trim();
                     const fullName = contact.fullName || contact.name || contact.Name ||
                         (contact.firstName ? `${contact.firstName} ${contact.lastName || ''}`.trim() : '') || '';
-                    const whatsapp = contact.whatsapp || contact.phone || contact.Phone || '';
+                    let email;
+                    let whatsapp;
+                    if (normalizedCampaignType === 'EMAIL') {
+                        email = (contact.email || contact.Email || contact['E-mail'] || '').toString().toLowerCase().trim();
+                        whatsapp = contact.whatsapp || contact.phone || contact.Phone || '';
+                    }
+                    else {
+                        // SMS: whatsapp is the primary key, email is synthetic to satisfy DB constraint
+                        whatsapp = (contact.whatsapp || contact.phone || contact.Phone || '').toString().trim();
+                        const sanitizedPhone = whatsapp.replace(/[^\d+]/g, '');
+                        email = `sms-${sanitizedPhone}@placeholder.invalid`;
+                    }
                     const data = { email, fullName, whatsapp };
                     if (segmentId)
                         data.segmentId = segmentId;
@@ -383,14 +471,23 @@ const importContacts = async (req, res) => {
             }
         }
         // Update existing contacts to belong to the segment (re-import case)
-        if (existingEmailSet.size > 0 && segmentId) {
-            console.log(`[Import] Updating ${existingEmailSet.size} existing contacts with segment...`);
-            await prisma_1.default.lead.updateMany({
-                where: { email: { in: [...existingEmailSet] } },
-                data: { segmentId }
-            });
+        if (existingSet.size > 0 && segmentId) {
+            console.log(`[Import] Updating ${existingSet.size} existing contacts with segment...`);
+            if (dedupeKey === 'email') {
+                await prisma_1.default.lead.updateMany({
+                    where: { email: { in: [...existingSet] } },
+                    data: { segmentId }
+                });
+            }
+            else {
+                await prisma_1.default.lead.updateMany({
+                    where: { whatsapp: { in: [...existingSet] } },
+                    data: { segmentId }
+                });
+            }
         }
-        console.log(`[Import] Import complete. Imported: ${importedCount}, Duplicates: ${duplicates.length}`);
+        const elapsed = Date.now() - t0;
+        console.log(`[Import] Import complete. Imported: ${importedCount}, Duplicates: ${duplicates.length}. Total time: ${elapsed}ms`);
         res.status(201).json({
             message: `Imported ${importedCount} contacts. ${duplicates.length} already exist.`,
             segmentId,
@@ -399,7 +496,8 @@ const importContacts = async (req, res) => {
         });
     }
     catch (error) {
-        console.error('[Import] Error:', error);
+        const elapsed = Date.now() - t0;
+        console.error(`[Import] Error after ${elapsed}ms:`, error);
         res.status(500).json({ error: 'Failed to import contacts', details: error.message });
     }
 };

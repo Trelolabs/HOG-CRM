@@ -33,6 +33,22 @@ vi.mock('../src/utils/prisma', () => ({
     default: mockPrisma
 }));
 
+vi.mock('bullmq', () => {
+    class MockQueue {
+        addBulk = vi.fn().mockResolvedValue([]);
+        add = vi.fn().mockResolvedValue({ id: 'mock-job-id' });
+        getJob = vi.fn().mockResolvedValue(null);
+    }
+    class MockWorker {
+        on = vi.fn();
+    }
+    return {
+        Queue: MockQueue,
+        Worker: MockWorker
+    };
+});
+
+
 const basicAuth = `Basic ${Buffer.from('admin:secret').toString('base64')}`;
 
 describe('CRM API endpoints', () => {

@@ -8,6 +8,10 @@ export default function Badge({ value }: { value: string }) {
       ? 'bg-amber-50 text-amber-700'
       : value === 'SENT'
       ? 'bg-emerald-50 text-emerald-700'
+      : value === 'EMAIL'
+      ? 'bg-indigo-50 text-indigo-700'
+      : value === 'SMS'
+      ? 'bg-purple-50 text-purple-700'
       : 'bg-zinc-100 text-zinc-700';
 
   return <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${color}`}>{value}</span>;
