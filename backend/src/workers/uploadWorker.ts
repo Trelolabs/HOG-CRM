@@ -51,8 +51,8 @@ export const uploadWorker = new Worker('uploadQueue', async job => {
       const workbook = xlsx.readFile(filePath);
       const sheetName = workbook.SheetNames[0];
       const sheet = workbook.Sheets[sheetName];
-
-      const data = xlsx.utils.sheet_to_json(sheet);
+      
+      const data = xlsx.utils.sheet_to_json(sheet, { defval: null });
       rawContacts = data;
       contacts = ContactExtractorService.extractFromStructuredData(data, normalizedCampaignType);
 
