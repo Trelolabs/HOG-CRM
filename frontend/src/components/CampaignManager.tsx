@@ -61,13 +61,16 @@ export default function CampaignManager({ type }: CampaignManagerProps) {
       const res = await apiClient.get<{ data: Lead[] }>(`/api/leads?segmentId=${id}&limit=1000`);
       const leads = res.data || [];
       setContacts(leads);
-      setSelectedIds(new Set(leads.map((c: Lead) => c.id)));
+      const filteredLeads = type === 'SMS'
+        ? leads.filter((c: Lead) => c.whatsapp && c.email.endsWith('@placeholder.invalid'))
+        : leads.filter((c: Lead) => !c.email.endsWith('@placeholder.invalid'));
+      setSelectedIds(new Set(filteredLeads.map((c: Lead) => c.id)));
     } catch {
       toast.error('Failed to load contacts');
     } finally {
       setLoadingContacts(false);
     }
-  }, []);
+  }, [type]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -168,7 +171,7 @@ export default function CampaignManager({ type }: CampaignManagerProps) {
     if (type === 'SMS') {
       return contacts.filter(c =>
         c.whatsapp &&
-        !c.email.endsWith('@placeholder.invalid') &&
+        c.email.endsWith('@placeholder.invalid') &&
         c.whatsapp.toLowerCase().includes(searchQuery.toLowerCase())
       );
     }

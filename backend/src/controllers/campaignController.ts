@@ -251,7 +251,8 @@ export const sendToLeads = async (req: Request, res: Response) => {
         await prisma.campaign.update({
             where: { id: campaign.id },
             data: {
-                status: 'SCHEDULED',
+                status: 'SENT',
+                sentAt: new Date(),
                 attemptedRecipients: leads.length
             }
         });

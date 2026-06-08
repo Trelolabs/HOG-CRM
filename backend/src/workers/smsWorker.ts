@@ -16,6 +16,16 @@ const getTwilioClient = () => {
   return client;
 };
 
+function normalizePhoneNumber(phone: string): string {
+  const cleaned = phone.replace(/[\s\-().]/g, '');
+  if (cleaned.startsWith('+')) return cleaned;
+  if (cleaned.startsWith('00')) return '+' + cleaned.slice(2);
+  if (/^\d{10}$/.test(cleaned)) return '+91' + cleaned;
+  if (/^91\d{10}$/.test(cleaned)) return '+' + cleaned;
+  if (/^1\d{10}$/.test(cleaned)) return '+' + cleaned;
+  return '+' + cleaned;
+}
+
 export const smsWorker = new Worker('smsQueue', async job => {
   const { to, body, recipient, campaignId } = job.data;
 
@@ -47,12 +57,13 @@ export const smsWorker = new Worker('smsQueue', async job => {
     if (!twilioClient) {
       throw new Error('Failed to initialize Twilio client');
     }
+    const normalizedTo = normalizePhoneNumber(to);
     const response = await twilioClient.messages.create({
       from: fromNumber,
-      to,
+      to: normalizedTo,
       body: messageBody,
     });
-    console.log(`[SMSWorker] Sent to ${to}, sid: ${response.sid}`);
+    console.log(`[SMSWorker] Sent to ${normalizedTo} (original: ${to}), sid: ${response.sid}`);
   } else {
     console.log(`[SMSWorker] Mock send to ${to}: ${messageBody}`);
   }
