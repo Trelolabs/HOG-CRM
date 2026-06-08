@@ -3,7 +3,15 @@ import prisma from '../utils/prisma';
 
 export const getSegments = async (req: Request, res: Response) => {
     try {
+        const { type } = req.query;
+        const where: any = {};
+
+        if (type && (type === 'EMAIL' || type === 'SMS')) {
+            where.campaignType = type as string;
+        }
+
         const segments = await prisma.segment.findMany({
+            where,
             include: { _count: { select: { leads: true } } }
         });
         res.json(segments);
@@ -13,14 +21,27 @@ export const getSegments = async (req: Request, res: Response) => {
 };
 
 export const createSegment = async (req: Request, res: Response) => {
-    const { name, description } = req.body;
+    const { name, description, campaignType } = req.body;
     if (!name || !String(name).trim()) {
         return res.status(400).json({ error: 'Segment name is required' });
     }
 
+    if (!campaignType) {
+        return res.status(400).json({ error: 'campaignType is required (EMAIL or SMS)' });
+    }
+
+    const normalizedType = String(campaignType).toUpperCase();
+    if (!['EMAIL', 'SMS'].includes(normalizedType)) {
+        return res.status(400).json({ error: 'Invalid campaignType. Allowed: EMAIL, SMS' });
+    }
+
     try {
         const segment = await prisma.segment.create({
-            data: { name: String(name).trim(), description: description?.trim() || null }
+            data: {
+                name: String(name).trim(),
+                description: description?.trim() || null,
+                campaignType: normalizedType as any
+            }
         });
         res.status(201).json(segment);
     } catch (error: any) {

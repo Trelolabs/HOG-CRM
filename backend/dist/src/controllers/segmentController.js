@@ -7,7 +7,13 @@ exports.deleteSegment = exports.updateSegment = exports.createSegment = exports.
 const prisma_1 = __importDefault(require("../utils/prisma"));
 const getSegments = async (req, res) => {
     try {
+        const { type } = req.query;
+        const where = {};
+        if (type && (type === 'EMAIL' || type === 'SMS')) {
+            where.campaignType = type;
+        }
         const segments = await prisma_1.default.segment.findMany({
+            where,
             include: { _count: { select: { leads: true } } }
         });
         res.json(segments);
@@ -18,13 +24,24 @@ const getSegments = async (req, res) => {
 };
 exports.getSegments = getSegments;
 const createSegment = async (req, res) => {
-    const { name, description } = req.body;
+    const { name, description, campaignType } = req.body;
     if (!name || !String(name).trim()) {
         return res.status(400).json({ error: 'Segment name is required' });
     }
+    if (!campaignType) {
+        return res.status(400).json({ error: 'campaignType is required (EMAIL or SMS)' });
+    }
+    const normalizedType = String(campaignType).toUpperCase();
+    if (!['EMAIL', 'SMS'].includes(normalizedType)) {
+        return res.status(400).json({ error: 'Invalid campaignType. Allowed: EMAIL, SMS' });
+    }
     try {
         const segment = await prisma_1.default.segment.create({
-            data: { name: String(name).trim(), description: description?.trim() || null }
+            data: {
+                name: String(name).trim(),
+                description: description?.trim() || null,
+                campaignType: normalizedType
+            }
         });
         res.status(201).json(segment);
     }

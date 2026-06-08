@@ -13,9 +13,10 @@ interface UploadModalProps {
   open: boolean;
   onClose: () => void;
   onImported: (contacts: Lead[], segmentName: string, segmentId: string) => void;
+  campaignType?: 'EMAIL' | 'SMS';
 }
 
-export default function UploadModal({ open, onClose, onImported }: UploadModalProps) {
+export default function UploadModal({ open, onClose, onImported, campaignType = 'EMAIL' }: UploadModalProps) {
   const [uploading, setUploading] = useState(false);
   const [polling, setPolling] = useState(false);
   const [importing, setImporting] = useState(false);
@@ -24,12 +25,14 @@ export default function UploadModal({ open, onClose, onImported }: UploadModalPr
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const isMountedRef = useRef(true);
 
+
   const clearPolling = () => {
     if (pollingIntervalRef.current) {
       clearInterval(pollingIntervalRef.current);
       pollingIntervalRef.current = null;
     }
   };
+
 
   const onDrop = async (acceptedFiles: File[]) => {
     if (acceptedFiles.length === 0) return;
@@ -41,7 +44,7 @@ export default function UploadModal({ open, onClose, onImported }: UploadModalPr
     setExtractedCount(0);
     const formData = new FormData();
     formData.append('file', file);
-    formData.append('type', 'any');
+    formData.append('campaignType', campaignType);
 
     try {
       const response = await fetch('/api/campaigns/upload', {
@@ -89,8 +92,10 @@ export default function UploadModal({ open, onClose, onImported }: UploadModalPr
               setExtractedCount(extractedContacts.length);
 
               if (extractedContacts.length === 0) {
-                toast.warning('No emails found in file');
-                setUploading(false);
+                toast.warning(campaignType === 'SMS' ? 'No phone numbers found in file' : 'No emails found in file');
+                if (isMountedRef.current) {
+                  setUploading(false);
+                }
                 return;
               }
 
@@ -107,6 +112,7 @@ export default function UploadModal({ open, onClose, onImported }: UploadModalPr
                 body: JSON.stringify({
                   contacts: extractedContacts,
                   segmentName: finalSegmentName,
+                  campaignType,
                 }),
               });
 
@@ -208,14 +214,14 @@ export default function UploadModal({ open, onClose, onImported }: UploadModalPr
               <Loader className="w-12 h-12 text-blue-500 animate-spin mx-auto mb-2" />
               <p className="text-gray-400">{uploading ? 'Uploading...' : polling ? 'Processing...' : 'Importing...'}</p>
               {extractedCount > 0 && (
-                <p className="text-sm text-blue-400 mt-2">Found {extractedCount} email addresses</p>
+                <p className="text-sm text-blue-400 mt-2">Found {extractedCount} {campaignType === 'SMS' ? 'phone numbers' : 'email addresses'}</p>
               )}
             </>
           ) : (
             <>
               <UploadCloud className="w-12 h-12 text-gray-400 mx-auto mb-2" />
               <h3 className="text-lg font-semibold text-white mb-1">Drop any file here</h3>
-              <p className="text-sm text-gray-400">CSV, Excel, PDF, DOCX, TXT — we extract all emails</p>
+              <p className="text-sm text-gray-400">CSV, Excel, PDF, DOCX, TXT — we extract all {campaignType === 'EMAIL' ? 'emails' : 'contacts'}</p>
             </>
           )}
         </div>
@@ -231,12 +237,22 @@ export default function UploadModal({ open, onClose, onImported }: UploadModalPr
           />
         </div>
 
+        {/* Expected format hint */}
+        <div className="text-xs text-gray-400 p-3 bg-gray-900/30 rounded-lg border border-gray-700">
+          <div className="font-semibold mb-1">Expected format:</div>
+          {campaignType === 'EMAIL' ? (
+            <div>Required column: <code className="bg-gray-800 px-1.5 py-0.5 rounded">Email</code> • Optional: <code className="bg-gray-800 px-1.5 py-0.5 rounded">Name</code></div>
+          ) : (
+            <div>Required column: <code className="bg-gray-800 px-1.5 py-0.5 rounded">Phone</code>, <code className="bg-gray-800 px-1.5 py-0.5 rounded">Mobile</code>, or <code className="bg-gray-800 px-1.5 py-0.5 rounded">WhatsApp</code> • Optional: <code className="bg-gray-800 px-1.5 py-0.5 rounded">Name</code></div>
+          )}
+        </div>
+
         {/* Info message */}
         {extractedCount > 0 && (
           <div className="flex gap-2 p-3 bg-blue-50/10 rounded-lg border border-blue-500/30">
             <AlertCircle className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" />
             <div className="text-sm text-blue-400">
-              Found {extractedCount} email addresses. Click Import to proceed.
+              Found {extractedCount} {campaignType === 'SMS' ? 'phone numbers' : 'email addresses'}. Click Import to proceed.
             </div>
           </div>
         )}

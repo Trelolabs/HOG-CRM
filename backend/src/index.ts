@@ -16,6 +16,8 @@ validateCampaignProviderConfig();
 console.log('[Startup] Initializing workers...');
 import('./workers/uploadWorker').then(() => console.log('[Startup] UploadWorker initialized')).catch(err => console.error('[Startup] UploadWorker failed:', err));
 import('./workers/emailWorker').then(() => console.log('[Startup] EmailWorker initialized')).catch(err => console.error('[Startup] EmailWorker failed:', err));
+import('./workers/smsWorker').then(() => console.log('[Startup] SMSWorker initialized')).catch(err => console.error('[Startup] SMSWorker failed:', err));
+
 
 const port = Number(process.env.PORT || 4000);
 const app = createApp();

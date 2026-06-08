@@ -4,6 +4,7 @@ export interface Segment {
   id: string;
   name: string;
   description?: string | null;
+  campaignType: 'EMAIL' | 'SMS';
   _count?: { leads: number };
 }
 
